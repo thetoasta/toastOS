@@ -44,7 +44,7 @@ void kprint(const char *str);
 void kprint_newline(void);
 void clear_screen(void);
 void keyboard_handler_main(void);
-
+void init_shell();
 
 
 

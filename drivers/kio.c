@@ -31,14 +31,6 @@ unsigned int current_loc = 0;
 /* video memory begins at address 0xb8000 */
 char *vidptr = (char*)0xb8000;
 
-struct IDT_entry {
-	unsigned short int offset_lowerbits;
-	unsigned short int selector;
-	unsigned char zero;
-	unsigned char type_attr;
-	unsigned short int offset_higherbits;
-};
-
 struct IDT_entry IDT[IDT_SIZE];
 
 
@@ -139,15 +131,35 @@ void keyboard_handler_main(void)
             return;
 
         if (keycode == ENTER_KEY_CODE) {
+            // finish the current input line
             kprint_newline();
             input_buffer[input_index] = '\0';  // null-terminate
-            // process the input (print it, compare, etc)
-            // example: echo back what user typed
-            kprint("You typed: ");
-            kprint(input_buffer);
-            kprint_newline();
 
+            // process the input (print it, compare, etc)
+            if (strcmp(input_buffer, "hai") == 0) {
+                kprint("hai");
+                current_loc = 0;
+            } else if (strcmp(input_buffer, "clear") == 0) {
+                clear_screen();
+                current_loc = 0;
+            } else if (strcmp(input_buffer, "help") == 0) {
+                kprint("there is several commands thast is in toastOS 1.0. try 'system-quickinfo' for quick info and system data");
+            } else if (strcmp(input_buffer, "system-quickinfo") == 0) {
+                kprint("hey! toastOS is a simple os made by thetoasta! heavy dev rn, and there is more to come. ");
+                kprint_newline();
+                kprint("version 1.0 - thetoasta - 2025 report issues on thetoasta/toastOS.");
+            } else if (strcmp(input_buffer, "fs-testfile") == 0) {
+                kprint("testfile is being written.");
+            } else if (strcmp(input_buffer, "") == 0) {
+                // do nothing for empty input
+            } else {
+                kprint("toastOS doesn't know that command yet :( if you'd like to add it, open a pr with the command and or add a issue!");
+            }
+
+            // reset buffer and show a fresh prompt
             input_index = 0; // reset buffer
+            kprint_newline();
+            kprint("toastOS > ");
             return;
         }
 
@@ -162,6 +174,15 @@ void keyboard_handler_main(void)
     }
 }
 
+void init_shell() {
+  clear_screen();
+	kprint("Welcome to toastOS! ");
+	kprint_newline();
+  kprint("toastOS > ");
+
+	idt_init();
+	kb_init();
+}
 
 unsigned char keyboard_map[128] =
  {

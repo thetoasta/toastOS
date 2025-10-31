@@ -1,6 +1,8 @@
 /*
-* Copyright (C) 2014  Arjun Sreedharan
-* License: GPL version 2 or higher http://www.gnu.org/licenses/gpl.html
+* Copyright (C) 2025 "thetoasta"
+* License: Use the license that is in the provided LICENSE file. 
+* Not complying with the license will revoke your access to new updates on toastOS or any other thing.
+Use well, and have fun!
 */
 
 #include "drivers/kio.h"
@@ -8,13 +10,7 @@
 /* there are 25 lines each of 80 columns; each element takes 2 bytes */
 void kmain(void)
 {
-	clear_screen();
-	kprint("hey yall");
-	kprint_newline();
-	kprint_newline();
-
-	idt_init();
-	kb_init();
+	init_shell();
 
 	while(1);
 }
