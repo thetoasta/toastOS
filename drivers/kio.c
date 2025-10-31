@@ -1,18 +1,24 @@
 #include "kio.h"
+#include "funcs.h"
 
 /* there are 25 lines each of 80 columns; each element takes 2 bytes */
 #define LINES 25
 #define COLUMNS_IN_LINE 80
 #define BYTES_FOR_EACH_ELEMENT 2
 #define SCREENSIZE BYTES_FOR_EACH_ELEMENT * COLUMNS_IN_LINE * LINES
+/* needed stuff for a ib? */
+
+char input_buffer[KEYBOARD_INPUT_LENGTH];
+unsigned int input_index = 0;
+
 
 #define KEYBOARD_DATA_PORT 0x60
 #define KEYBOARD_STATUS_PORT 0x64
 #define IDT_SIZE 256
 #define INTERRUPT_GATE 0x8e
 #define KERNEL_CODE_SEGMENT_OFFSET 0x08
-
-#define ENTER_KEY_CODE 0x1C
+#define KEYBOARD_INPUT_LENGTH 256 /* hey i made a input system :) */
+#define ENTER_KEY_CODE 0x1C /* enter code that is a key */
 
 extern unsigned char keyboard_map[128];
 extern void keyboard_handler(void);
@@ -121,28 +127,41 @@ void clear_screen(void)
 
 void keyboard_handler_main(void)
 {
-	unsigned char status;
-	char keycode;
+    unsigned char status;
+    char keycode;
 
-	/* write EOI */
-	write_port(0x20, 0x20);
+    write_port(0x20, 0x20);
 
-	status = read_port(KEYBOARD_STATUS_PORT);
-	/* Lowest bit of status will be set if buffer is not empty */
-	if (status & 0x01) {
-		keycode = read_port(KEYBOARD_DATA_PORT);
-		if(keycode < 0)
-			return;
+    status = read_port(KEYBOARD_STATUS_PORT);
+    if (status & 0x01) {
+        keycode = read_port(KEYBOARD_DATA_PORT);
+        if (keycode < 0)
+            return;
 
-		if(keycode == ENTER_KEY_CODE) {
-			kprint_newline();
-			return;
-		}
+        if (keycode == ENTER_KEY_CODE) {
+            kprint_newline();
+            input_buffer[input_index] = '\0';  // null-terminate
+            // process the input (print it, compare, etc)
+            // example: echo back what user typed
+            kprint("You typed: ");
+            kprint(input_buffer);
+            kprint_newline();
 
-		vidptr[current_loc++] = keyboard_map[(unsigned char) keycode];
-		vidptr[current_loc++] = 0x07;
-	}
+            input_index = 0; // reset buffer
+            return;
+        }
+
+        char c = keyboard_map[(unsigned char)keycode];
+        if (c) {
+            if (input_index < KEYBOARD_INPUT_LENGTH - 1) {
+                input_buffer[input_index++] = c;
+                vidptr[current_loc++] = c;
+                vidptr[current_loc++] = 0x07;
+            }
+        }
+    }
 }
+
 
 unsigned char keyboard_map[128] =
  {

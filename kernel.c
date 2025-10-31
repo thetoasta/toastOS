@@ -8,9 +8,8 @@
 /* there are 25 lines each of 80 columns; each element takes 2 bytes */
 void kmain(void)
 {
-	const char *str = "my first kernel with keyboard support";
 	clear_screen();
-	kprint(str);
+	kprint("hey yall");
 	kprint_newline();
 	kprint_newline();
 
