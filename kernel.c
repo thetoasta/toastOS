@@ -1,9 +1,8 @@
 /*
-* Copyright (C) 2025 "thetoasta"
-* License: Use the license that is in the provided LICENSE file. 
-* Not complying with the license will revoke your access to new updates on toastOS or any other thing.
-Use well, and have fun!
-*/
+ * Copyright (C) 2025 thetoasta
+ * This file is licensed under the Mozilla Public License, v. 2.0.
+ * You may obtain a copy of the License at https://mozilla.org/MPL/2.0/
+ */
 
 #include "drivers/kio.h"
 
