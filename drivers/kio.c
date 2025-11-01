@@ -11,6 +11,16 @@
 char input_buffer[KEYBOARD_INPUT_LENGTH];
 unsigned int input_index = 0;
 
+static inline void outw(unsigned short port, unsigned short val) {
+    __asm__ volatile ("outw %0, %1" : : "a"(val), "Nd"(port));
+}
+
+void shutdown() {
+    // Try all common emulator shutdown ports
+    outw(0x604, 0x2000); // QEMU/Bochs
+    outw(0xB004, 0x2000); // Older Bochs
+    __asm__ volatile ("cli; hlt"); // Halt CPU if above doesn't work
+}
 
 #define KEYBOARD_DATA_PORT 0x60
 #define KEYBOARD_STATUS_PORT 0x64
@@ -152,6 +162,9 @@ void keyboard_handler_main(void)
                 kprint("testfile is being written.");
             } else if (strcmp(input_buffer, "") == 0) {
                 // do nothing for empty input
+            } else if (strcmp(input_buffer, "shutdown") == 0) {
+                kprint("shutting down...");
+                shutdown();
             } else {
                 kprint("toastOS doesn't know that command yet :( if you'd like to add it, open a pr with the command and or add a issue!");
             }
