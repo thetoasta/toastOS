@@ -1,11 +1,32 @@
 #ifndef KERNEL_KEYBOARD_H
 #define KERNEL_KEYBOARD_H
+#include "stdint.h"
 
 /* screen configuration */
 #define LINES 25
 #define COLUMNS_IN_LINE 80
 #define BYTES_FOR_EACH_ELEMENT 2
 #define KEYBOARD_INPUT_LENGTH 256 /* hey i made a input system :) */
+
+/* Colors, you can print colors */
+
+#define BLACK 0x0
+#define BLUE 0x1
+#define GREEN 0x2
+#define CYAN 0x3
+#define RED 0x4
+#define MAGENTA 0x5
+#define BROWN 0x6
+#define LIGHT_GREY 0x7
+#define DARK_GREY 0x8
+#define LIGHT_BLUE 0x9
+#define LIGHT_GREEN 0xA
+#define LIGHT_CYAN 0xB
+#define LIGHT_RED 0xC
+#define LIGHT_MAGENTA 0xD
+#define YELLOW 0xE
+#define WHITE 0xF
+
 
 /* I/O ports and constants */
 #define KEYBOARD_DATA_PORT 0x60
@@ -45,7 +66,8 @@ void kprint_newline(void);
 void clear_screen(void);
 void keyboard_handler_main(void);
 void init_shell();
-
+void panic_init();
+void toast_shell_color(const char* str, uint8_t color);
 
 
 

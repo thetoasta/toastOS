@@ -1,5 +1,7 @@
 #include "kio.h"
 #include "funcs.h"
+#include "panic.h"
+#include "stdint.h"
 
 #define LINES 25
 #define COLUMNS_IN_LINE 80
@@ -148,6 +150,11 @@ void keyboard_handler_main(void) {
                 kprint("toastOS by thetoasta, version 1.0 - 2025");
                 kprint_newline();
                 kprint("Report issues on thetoasta/toastOS.");
+            } else if (strcmp(input_buffer, "panic") == 0) {
+                kprint("PCI.");
+                l1_panic("Manual panic triggered.");
+            } else if (strcmp(input_buffer, "mpanic") == 0) {
+                l3_panic("fatal panic");
             } else if (strcmp(input_buffer, "fs-testfile") == 0) {
                 kprint("testfile is being written.");
             } else if (strcmp(input_buffer, "cursor-disable") == 0) {
@@ -191,6 +198,26 @@ void init_shell(void) {
     enable_cursor(0, 15);
     idt_init();
     kb_init();
+}
+
+void panic_init(void) {
+    kprint("Welcome BACK to toastOS!");
+    kprint_newline();
+    kprint("toastOS > ");
+    enable_cursor(0, 15);
+    idt_init();
+    kb_init();
+}
+
+void toast_shell_color(const char* str, uint8_t color) {
+    unsigned int i = 0;
+    while (str[i]) {
+        vidptr[current_loc++] = str[i++];
+        vidptr[current_loc++] = color;
+    }
+    int x = (current_loc / 2) % COLUMNS_IN_LINE;
+    int y = (current_loc / 2) / COLUMNS_IN_LINE;
+    update_cursor(x, y);
 }
 
 unsigned char keyboard_map[128] = {
