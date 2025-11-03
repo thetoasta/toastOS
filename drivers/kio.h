@@ -68,7 +68,7 @@ void keyboard_handler_main(void);
 void init_shell();
 void panic_init();
 void toast_shell_color(const char* str, uint8_t color);
-
+char* rec_input(void);
 
 
 #endif /* KERNEL_KEYBOARD_H */

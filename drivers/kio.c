@@ -2,6 +2,7 @@
 #include "funcs.h"
 #include "panic.h"
 #include "stdint.h"
+#include "file.h"
 
 #define LINES 25
 #define COLUMNS_IN_LINE 80
@@ -157,6 +158,8 @@ void keyboard_handler_main(void) {
                 l3_panic("fatal panic");
             } else if (strcmp(input_buffer, "fs-testfile") == 0) {
                 kprint("testfile is being written.");
+                local_fs("testfile.txt", "This is a test file created in toastOS's local filesystem.");
+                
             } else if (strcmp(input_buffer, "cursor-disable") == 0) {
                 kprint("Disabling cursor.");
                 disable_cursor();
@@ -186,6 +189,37 @@ void keyboard_handler_main(void) {
             vidptr[current_loc++] = c;
             vidptr[current_loc++] = 0x07;
             update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
+        }
+    }
+}
+
+char* rec_input(void) {
+    static char temp_buffer[KEYBOARD_INPUT_LENGTH];
+    int temp_index = 0;
+    
+    while(1) {
+        unsigned char status = read_port(KEYBOARD_STATUS_PORT);
+        if (status & 0x01) {
+            char keycode = read_port(KEYBOARD_DATA_PORT);
+            if (keycode == ENTER_KEY_CODE) {
+                temp_buffer[temp_index] = '\0';
+                kprint_newline();
+                return temp_buffer;
+            }
+
+            char c = keyboard_map[(unsigned char)keycode];
+            if (c == '\b' && temp_index > 0) {
+                temp_index--;
+                current_loc -= 2;
+                vidptr[current_loc] = ' ';
+                vidptr[current_loc + 1] = 0x07;
+                update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
+            } else if (c && temp_index < KEYBOARD_INPUT_LENGTH - 1) {
+                temp_buffer[temp_index++] = c;
+                vidptr[current_loc++] = c;
+                vidptr[current_loc++] = 0x07;
+                update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
+            }
         }
     }
 }

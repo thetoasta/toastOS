@@ -1,0 +1,1 @@
+void local_fs(const char* filename, const char* content);
