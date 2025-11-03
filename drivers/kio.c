@@ -159,10 +159,21 @@ void keyboard_handler_main(void) {
             } else if (strcmp(input_buffer, "fs-testfile") == 0) {
                 kprint("testfile is being written.");
                 local_fs("testfile.txt", "This is a test file created in toastOS's local filesystem.");
-                
+            } else if (strcmp(input_buffer, "fs-readfile") == 0) {
+                kprint("Reading testfile.txt from local filesystem.");
+                read_local_fs("testfile");
+            } else if (strcmp(input_buffer, "cursor-enable") == 0) {
+                kprint("Enabling cursor.");
+                enable_cursor(0, 15);
             } else if (strcmp(input_buffer, "cursor-disable") == 0) {
                 kprint("Disabling cursor.");
                 disable_cursor();
+            } else if (strcmp(input_buffer, "fun printwithcolor") == 0) {
+                kprint("Type the color code.");
+                char* color = rec_input();
+                kprint("Type the string to print:");
+                char* str = rec_input();
+                toast_shell_color(str, (uint8_t)(*color));
             } else if (strcmp(input_buffer, "shutdown") == 0) {
                 kprint("shutting down...");
                 shutdown();

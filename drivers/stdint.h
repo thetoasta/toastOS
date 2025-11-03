@@ -1,34 +1,21 @@
-#ifndef STDINT_H// stdint.h (minimal version)
-
-#define STDINT_H#ifndef _STDINT_H
-
+#ifndef _STDINT_H
 #define _STDINT_H
 
+// stdint.h (minimal version)
+
 // Exact-width integer types
+typedef signed char int8_t;
+typedef unsigned char uint8_t;
+typedef short int16_t;
+typedef unsigned short uint16_t;
+typedef int int32_t;
+typedef unsigned int uint32_t;
+typedef long long int64_t;
+typedef unsigned long long uint64_t;
 
-typedef signed char int8_t;typedef signed char        int8_t;
-
-typedef unsigned char uint8_t;typedef unsigned char      uint8_t;
-
-typedef short int16_t;typedef short              int16_t;
-
-typedef unsigned short uint16_t;typedef unsigned short     uint16_t;
-
-typedef int int32_t;typedef int                int32_t;
-
-typedef unsigned int uint32_t;typedef unsigned int       uint32_t;
-
-typedef long long int64_t;typedef long long          int64_t;
-
-typedef unsigned long long uint64_t;typedef unsigned long long uint64_t;
-
-
-
-// Minimum-width integer types#endif // _STDINT_H
-
+// Minimum-width integer types
 typedef signed char int_least8_t;
-
-typedef unsigned char uint_least8_t;/* this code is taken from github copilot don't murder me */
+typedef unsigned char uint_least8_t;
 typedef short int_least16_t;
 typedef unsigned short uint_least16_t;
 typedef int int_least32_t;
@@ -54,4 +41,4 @@ typedef unsigned int uintptr_t;
 typedef long long intmax_t;
 typedef unsigned long long uintmax_t;
 
-#endif // STDINT_H
+#endif // _STDINT_H
