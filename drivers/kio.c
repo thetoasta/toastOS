@@ -146,7 +146,14 @@ void keyboard_handler_main(void) {
             } else if (strcmp(input_buffer, "clear") == 0) {
                 clear_screen();
             } else if (strcmp(input_buffer, "help") == 0) {
-                kprint("Several commands in toastOS 1.0. Try 'system-quickinfo' for info.");
+                kprint("toastOS v1.0 Commands:");
+                kprint_newline();
+                kprint("  clear, help, system-quickinfo, shutdown");
+                kprint_newline();
+                kprint("  fs-testfile, fs-readfile, fs-list, fs-autotest");
+                kprint_newline();
+                kprint("  cursor-enable, cursor-disable, panic, mpanic");
+                kprint_newline();
             } else if (strcmp(input_buffer, "system-quickinfo") == 0) {
                 kprint("toastOS by thetoasta, version 1.0 - 2025");
                 kprint_newline();
@@ -157,11 +164,13 @@ void keyboard_handler_main(void) {
             } else if (strcmp(input_buffer, "mpanic") == 0) {
                 l3_panic("fatal panic");
             } else if (strcmp(input_buffer, "fs-testfile") == 0) {
-                kprint("testfile is being written.");
                 local_fs("testfile.txt", "This is a test file created in toastOS's local filesystem.");
             } else if (strcmp(input_buffer, "fs-readfile") == 0) {
-                kprint("Reading testfile.txt from local filesystem.");
-                read_local_fs("testfile");
+                read_local_fs("testfile.txt-1");
+            } else if (strcmp(input_buffer, "fs-list") == 0) {
+                list_files();
+            } else if (strcmp(input_buffer, "fs-autotest") == 0) {
+                fs_test_auto();
             } else if (strcmp(input_buffer, "cursor-enable") == 0) {
                 kprint("Enabling cursor.");
                 enable_cursor(0, 15);
