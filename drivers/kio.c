@@ -3,6 +3,7 @@
 #include "panic.h"
 #include "stdint.h"
 #include "file.h"
+#include "security.h"
 
 #define LINES 25
 #define COLUMNS_IN_LINE 80
@@ -45,6 +46,53 @@ void accept_fs_write() {
     local_fs(filename, content);
     kprint_newline();
 }
+
+void isr_handler(int interrupt_number) {
+    static const char *exceptions[] = {
+        "Divide By Zero",
+        "Debug",
+        "Non Maskable Interrupt",
+        "Breakpoint",
+        "Overflow",
+        "Bound Range Exceeded",
+        "Invalid Opcode",
+        "Device Not Available",
+        "Double Fault",
+        "Coprocessor Segment Overrun",
+        "Invalid TSS",
+        "Segment Not Present",
+        "Stack-Segment Fault",
+        "General Protection Fault",
+        "Page Fault",
+        "Reserved",
+        "x87 Floating Point Exception",
+        "Alignment Check",
+        "Machine Check",
+        "SIMD Floating Point Exception",
+        "Virtualization Exception",
+        "Control Protection Exception",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved"
+    };
+
+    kprint("CPU Exception: ");
+    if (interrupt_number < 32)
+        kprint(exceptions[interrupt_number]);
+    else
+        kprint("Unknown Exception");
+    kprint("\nSystem Halted.\n");
+
+    for (;;) {} // freeze
+}
+
 
 void read_fs_contents() {
     kprint("WARNING: Make sure the file ID is correct.");
@@ -151,9 +199,15 @@ void keyboard_handler_main(void) {
     write_port(0x20, 0x20); // End of interrupt signal
 
     if (status & 0x01) {
-        char keycode = read_port(KEYBOARD_DATA_PORT);
+        unsigned char keycode = read_port(KEYBOARD_DATA_PORT);
+        
+        // Ignore key release events (bit 7 set means key released)
+        if (keycode & 0x80) {
+            return;
+        }
         
         if (keycode == ENTER_KEY_CODE) {
+            
             kprint_newline();
             input_buffer[input_index] = '\0';
             if (current_loc >= SCREENSIZE) {
@@ -175,10 +229,11 @@ void keyboard_handler_main(void) {
             } else if (strcmp(input_buffer, "read") == 0) {
                 kprint("toastOS v1.0 Commands:");
                 read_fs_contents();
-            } else if (strcmp(input_buffer, "system-quickinfo") == 0) {
-                kprint("toastOS by thetoasta, version 1.0 - 2025");
-                kprint_newline();
-                kprint("Report issues on thetoasta/toastOS.");
+            } else if (strcmp(input_buffer, "bomb") == 0) {
+               kprint("DONT TYPE ANYTHING OS WILL BOMB!!");
+               kprint(" THIS ISNT GOOD YOU LAUNCHED A BOMB!");
+               toast_shell_color(" lebron james is coming 4 u", YELLOW);
+               securecode = 0;
             } else if (strcmp(input_buffer, "panic") == 0) {
                 kprint("PCI.");
                 l1_panic("Manual panic triggered.");
@@ -233,6 +288,9 @@ void keyboard_handler_main(void) {
             vidptr[current_loc++] = 0x07;
             update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
         }
+        // you can turn off securecodes by not typing bomb but you cant idk what i'm rambling abyt
+        // check for a scancode, just type bomb! it will set securecode to 0, causing the os to panic halt
+        check_securecode();
     }
 }
 
