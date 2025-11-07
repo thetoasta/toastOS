@@ -30,6 +30,40 @@ extern char read_port(unsigned short port);
 extern void write_port(unsigned short port, unsigned char data);
 extern void load_idt(unsigned long *idt_ptr);
 
+// External ISR declarations
+extern void isr0(void);
+extern void isr1(void);
+extern void isr2(void);
+extern void isr3(void);
+extern void isr4(void);
+extern void isr5(void);
+extern void isr6(void);
+extern void isr7(void);
+extern void isr8(void);
+extern void isr9(void);
+extern void isr10(void);
+extern void isr11(void);
+extern void isr12(void);
+extern void isr13(void);
+extern void isr14(void);
+extern void isr15(void);
+extern void isr16(void);
+extern void isr17(void);
+extern void isr18(void);
+extern void isr19(void);
+extern void isr20(void);
+extern void isr21(void);
+extern void isr22(void);
+extern void isr23(void);
+extern void isr24(void);
+extern void isr25(void);
+extern void isr26(void);
+extern void isr27(void);
+extern void isr28(void);
+extern void isr29(void);
+extern void isr30(void);
+extern void isr31(void);
+
 struct IDT_entry IDT[IDT_SIZE];
 
 static inline void outw(unsigned short port, unsigned short val) {
@@ -47,7 +81,11 @@ void accept_fs_write() {
     kprint_newline();
 }
 
-void isr_handler(int interrupt_number) {
+void isr_handler(void) {
+    // Read interrupt number from stack
+    unsigned int interrupt_number;
+    __asm__ volatile("mov 4(%%ebp), %0" : "=r"(interrupt_number));
+    
     static const char *exceptions[] = {
         "Divide By Zero",
         "Debug",
@@ -83,14 +121,38 @@ void isr_handler(int interrupt_number) {
         "Reserved"
     };
 
-    kprint("CPU Exception: ");
-    if (interrupt_number < 32)
-        kprint(exceptions[interrupt_number]);
-    else
-        kprint("Unknown Exception");
-    kprint("\nSystem Halted.\n");
+    // Output to serial port (terminal)
+    serial_write_string("\n\n=================================\n");
+    serial_write_string("!!! CPU EXCEPTION DETECTED !!!\n");
+    serial_write_string("=================================\n");
+    serial_write_string("Exception #");
+    kprint_int(interrupt_number);
+    serial_write_string(": ");
+    if (interrupt_number < 32) {
+        serial_write_string(exceptions[interrupt_number]);
+    } else {
+        serial_write_string("Unknown Exception");
+    }
+    serial_write_string("\n=================================\n\n");
 
-    for (;;) {} // freeze
+    clear_screen();
+    kprint("\n=== CPU EXCEPTION ===\n");
+    
+    // Critical faults trigger l3_panic (major panic)
+    if (interrupt_number == 8 || // Double Fault
+        interrupt_number == 13 || // General Protection Fault
+        interrupt_number == 14) { // Page Fault
+        l3_panic(exceptions[interrupt_number]);
+    }
+    // Other exceptions trigger l1_panic (minor panic)
+    else if (interrupt_number < 32) {
+        l1_panic(exceptions[interrupt_number]);
+    }
+
+    // Freeze the system
+    while(1) {
+        __asm__ volatile("hlt");
+    }
 }
 
 
@@ -129,16 +191,55 @@ void shutdown() {
     __asm__ volatile("cli; hlt"); // Halt CPU if shutdown ports fail
 }
 
+static void set_idt_gate(int num, unsigned long handler) {
+    IDT[num].offset_lowerbits = handler & 0xFFFF;
+    IDT[num].selector = KERNEL_CODE_SEGMENT_OFFSET;
+    IDT[num].zero = 0;
+    IDT[num].type_attr = INTERRUPT_GATE;
+    IDT[num].offset_higherbits = (handler >> 16) & 0xFFFF;
+}
+
 void idt_init(void) {
-    unsigned long keyboard_address = (unsigned long)keyboard_handler;
     unsigned long idt_address;
     unsigned long idt_ptr[2];
 
-    IDT[0x21].offset_lowerbits = keyboard_address & 0xFFFF;
-    IDT[0x21].selector = KERNEL_CODE_SEGMENT_OFFSET;
-    IDT[0x21].zero = 0;
-    IDT[0x21].type_attr = INTERRUPT_GATE;
-    IDT[0x21].offset_higherbits = (keyboard_address >> 16) & 0xFFFF;
+    // Register CPU exception handlers (ISR 0-31)
+    set_idt_gate(0, (unsigned long)isr0);
+    set_idt_gate(1, (unsigned long)isr1);
+    set_idt_gate(2, (unsigned long)isr2);
+    set_idt_gate(3, (unsigned long)isr3);
+    set_idt_gate(4, (unsigned long)isr4);
+    set_idt_gate(5, (unsigned long)isr5);
+    set_idt_gate(6, (unsigned long)isr6);
+    set_idt_gate(7, (unsigned long)isr7);
+    set_idt_gate(8, (unsigned long)isr8);
+    set_idt_gate(9, (unsigned long)isr9);
+    set_idt_gate(10, (unsigned long)isr10);
+    set_idt_gate(11, (unsigned long)isr11);
+    set_idt_gate(12, (unsigned long)isr12);
+    set_idt_gate(13, (unsigned long)isr13);
+    set_idt_gate(14, (unsigned long)isr14);
+    set_idt_gate(15, (unsigned long)isr15);
+    set_idt_gate(16, (unsigned long)isr16);
+    set_idt_gate(17, (unsigned long)isr17);
+    set_idt_gate(18, (unsigned long)isr18);
+    set_idt_gate(19, (unsigned long)isr19);
+    set_idt_gate(20, (unsigned long)isr20);
+    set_idt_gate(21, (unsigned long)isr21);
+    set_idt_gate(22, (unsigned long)isr22);
+    set_idt_gate(23, (unsigned long)isr23);
+    set_idt_gate(24, (unsigned long)isr24);
+    set_idt_gate(25, (unsigned long)isr25);
+    set_idt_gate(26, (unsigned long)isr26);
+    set_idt_gate(27, (unsigned long)isr27);
+    set_idt_gate(28, (unsigned long)isr28);
+    set_idt_gate(29, (unsigned long)isr29);
+    set_idt_gate(30, (unsigned long)isr30);
+    set_idt_gate(31, (unsigned long)isr31);
+
+    // Register keyboard handler (IRQ1 = ISR 33 = 0x21)
+    unsigned long keyboard_address = (unsigned long)keyboard_handler;
+    set_idt_gate(0x21, keyboard_address);
 
     // PIC Initialization
     write_port(0x20, 0x11);
@@ -213,8 +314,9 @@ void keyboard_handler_main(void) {
             if (current_loc >= SCREENSIZE) {
                 clear_screen();
             }
-            if (strcmp(input_buffer, "hai") == 0) {
-                kprint("hai");
+            if (strcmp(input_buffer, "db0f") == 0) {
+                kprint("DB0 FAULT");
+                int a = 5/0;
             } else if (strcmp(input_buffer, "clear") == 0) {
                 clear_screen();
             } else if (strcmp(input_buffer, "help") == 0) {
@@ -232,6 +334,7 @@ void keyboard_handler_main(void) {
             } else if (strcmp(input_buffer, "bomb") == 0) {
                kprint("DONT TYPE ANYTHING OS WILL BOMB!!");
                kprint(" THIS ISNT GOOD YOU LAUNCHED A BOMB!");
+               serial_write_string("[SECURITY] toastSecure Code was changed from 1 to 0 in test. Next letter input will lock the OS.");
                toast_shell_color(" lebron james is coming 4 u", YELLOW);
                securecode = 0;
             } else if (strcmp(input_buffer, "panic") == 0) {
@@ -326,13 +429,21 @@ char* rec_input(void) {
 }
 
 void init_shell(void) {
+    serial_init();  // Initialize serial port for debug output
+    serial_write_string("[DEBUG] toastOS starting...\n");
+    serial_write_string("[DEBUG] Serial port initialized\n");
+    
     clear_screen();
     kprint("Welcome to toastOS!");
     kprint_newline();
     kprint("toastOS > ");
     enable_cursor(0, 15);
+    
+    serial_write_string("[DEBUG] Setting up IDT...\n");
     idt_init();
+    serial_write_string("[DEBUG] Initializing keyboard...\n");
     kb_init();
+    serial_write_string("[DEBUG] System ready!\n");
 }
 
 void panic_init(void) {

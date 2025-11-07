@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # build.sh for toastOS under WSL
+# toastOS prioritizes macOS building
 set -euo pipefail
 
 # Check for required tools

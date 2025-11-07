@@ -13,6 +13,8 @@ void l1_panic(const char *message) {
     kprint_newline();
     panic_init();
     kprint_newline();
+    serial_write_string("Panic.");
+    serial_write_string(message);
 }
 
 void l3_panic(const char *message) {
@@ -22,5 +24,7 @@ void l3_panic(const char *message) {
     kprint_newline();
     kprint("toastOS has encountered a error, and cannot recover. Here was the error: ");
     kprint(message);
+    serial_write_string("Halt.");
+    serial_write_string(message);
     __asm__ volatile ("hlt");
 }
