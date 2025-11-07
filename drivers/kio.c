@@ -35,7 +35,25 @@ static inline void outw(unsigned short port, unsigned short val) {
     __asm__ volatile ("outw %0, %1" : : "a"(val), "Nd"(port));
 }
 
+void accept_fs_write() {
+    kprint("toastFS Opened. What do you want the FILENAME to be?");
+    kprint_newline();
+    char* filename = rec_input();
+    kprint("What content do you want to write to the file?");
 
+    char* content = rec_input();
+    local_fs(filename, content);
+    kprint_newline();
+}
+
+void read_fs_contents() {
+    kprint("WARNING: Make sure the file ID is correct.");
+    kprint_newline();
+    kprint("Enter the file ID to read:");
+    char* file_id = rec_input();
+    kprint_newline();
+    read_local_fs(file_id);
+}
 
 void update_cursor(int x, int y) {
     uint16_t pos = y * COLUMNS_IN_LINE + x;
@@ -154,6 +172,9 @@ void keyboard_handler_main(void) {
                 kprint_newline();
                 kprint("  cursor-enable, cursor-disable, panic, mpanic");
                 kprint_newline();
+            } else if (strcmp(input_buffer, "read") == 0) {
+                kprint("toastOS v1.0 Commands:");
+                read_fs_contents();
             } else if (strcmp(input_buffer, "system-quickinfo") == 0) {
                 kprint("toastOS by thetoasta, version 1.0 - 2025");
                 kprint_newline();
@@ -186,6 +207,8 @@ void keyboard_handler_main(void) {
             } else if (strcmp(input_buffer, "shutdown") == 0) {
                 kprint("shutting down...");
                 shutdown();
+            } else if (strcmp(input_buffer, "write") == 0) {
+                accept_fs_write();
             } else if (strcmp(input_buffer, "") != 0) {
                 kprint("Command not recognized. Open a PR or issue to add it!");
             }
@@ -262,6 +285,7 @@ void panic_init(void) {
     idt_init();
     kb_init();
 }
+
 
 void toast_shell_color(const char* str, uint8_t color) {
     unsigned int i = 0;
