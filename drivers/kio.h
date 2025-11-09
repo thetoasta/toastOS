@@ -60,6 +60,7 @@ extern struct IDT_entry IDT[IDT_SIZE];
 
 /* function declarations */
 void idt_init(void);
+void shutdown(void);
 void kb_init(void);
 void kprint(const char *str);
 void kprint_newline(void);

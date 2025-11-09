@@ -5,11 +5,13 @@
  */
 
 #include "drivers/kio.h"
+#include "drivers/security.h"
 
 /* there are 25 lines each of 80 columns; each element takes 2 bytes */
 void kmain(void)
-{
+{	
 	clear_screen();
+	security_init();
 	init_shell();
 	
 	// Initialize and test the filesystem

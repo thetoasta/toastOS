@@ -4,6 +4,16 @@
 #include "stdint.h"
 #include "file.h"
 #include "security.h"
+#include "services.h"
+
+int exceptionCount = 0;
+
+void exceptionCheck() {
+    if (exceptionCount > 1) {
+        l3_panic("Sorry, but toastOS experienced too many exceptions and is automatically shutting down for safety.");
+    }
+    
+}
 
 #define LINES 25
 #define COLUMNS_IN_LINE 80
@@ -81,11 +91,7 @@ void accept_fs_write() {
     kprint_newline();
 }
 
-void isr_handler(void) {
-    // Read interrupt number from stack
-    unsigned int interrupt_number;
-    __asm__ volatile("mov 4(%%ebp), %0" : "=r"(interrupt_number));
-    
+void isr_handler(unsigned int interrupt_number) {
     static const char *exceptions[] = {
         "Divide By Zero",
         "Debug",
@@ -126,6 +132,7 @@ void isr_handler(void) {
     serial_write_string("!!! CPU EXCEPTION DETECTED !!!\n");
     serial_write_string("=================================\n");
     serial_write_string("Exception #");
+    exceptionCount++;
     kprint_int(interrupt_number);
     serial_write_string(": ");
     if (interrupt_number < 32) {
@@ -137,6 +144,7 @@ void isr_handler(void) {
 
     clear_screen();
     kprint("\n=== CPU EXCEPTION ===\n");
+    exceptionCheck();
     
     // Critical faults trigger l3_panic (major panic)
     if (interrupt_number == 8 || // Double Fault
@@ -318,19 +326,11 @@ void keyboard_handler_main(void) {
                 kprint("DB0 FAULT");
                 int a = 5/0;
             } else if (strcmp(input_buffer, "clear") == 0) {
-                clear_screen();
+                callservice("clear", "shell");
             } else if (strcmp(input_buffer, "help") == 0) {
-                kprint("toastOS v1.0 Commands:");
-                kprint_newline();
-                kprint("  clear, help, system-quickinfo, shutdown");
-                kprint_newline();
-                kprint("  fs-testfile, fs-readfile, fs-list, fs-autotest");
-                kprint_newline();
-                kprint("  cursor-enable, cursor-disable, panic, mpanic");
-                kprint_newline();
+                callservice("help", "shell");
             } else if (strcmp(input_buffer, "read") == 0) {
-                kprint("toastOS v1.0 Commands:");
-                read_fs_contents();
+                callservice("fs-read", "shell");
             } else if (strcmp(input_buffer, "bomb") == 0) {
                kprint("DONT TYPE ANYTHING OS WILL BOMB!!");
                kprint(" THIS ISNT GOOD YOU LAUNCHED A BOMB!");
@@ -338,8 +338,7 @@ void keyboard_handler_main(void) {
                toast_shell_color(" lebron james is coming 4 u", YELLOW);
                securecode = 0;
             } else if (strcmp(input_buffer, "panic") == 0) {
-                kprint("PCI.");
-                l1_panic("Manual panic triggered.");
+                callservice("panic-test", "shell");
             } else if (strcmp(input_buffer, "mpanic") == 0) {
                 l3_panic("fatal panic");
             } else if (strcmp(input_buffer, "fs-testfile") == 0) {
@@ -347,28 +346,25 @@ void keyboard_handler_main(void) {
             } else if (strcmp(input_buffer, "fs-readfile") == 0) {
                 read_local_fs("testfile.txt-1");
             } else if (strcmp(input_buffer, "fs-list") == 0) {
-                list_files();
+                callservice("fs-list", "shell");
             } else if (strcmp(input_buffer, "fs-autotest") == 0) {
-                fs_test_auto();
+                callservice("fta", "shell");
             } else if (strcmp(input_buffer, "cursor-enable") == 0) {
-                kprint("Enabling cursor.");
-                enable_cursor(0, 15);
+                callservice("cursor-on", "shell");
             } else if (strcmp(input_buffer, "cursor-disable") == 0) {
-                kprint("Disabling cursor.");
-                disable_cursor();
+                callservice("cursor-off", "shell");
             } else if (strcmp(input_buffer, "fun printwithcolor") == 0) {
-                kprint("Type the color code.");
-                char* color = rec_input();
-                kprint("Type the string to print:");
-                char* str = rec_input();
-                toast_shell_color(str, (uint8_t)(*color));
+                callservice("color", "shell");
             } else if (strcmp(input_buffer, "shutdown") == 0) {
-                kprint("shutting down...");
-                shutdown();
+                callservice("shutdown", "shell");
             } else if (strcmp(input_buffer, "write") == 0) {
-                accept_fs_write();
+                callservice("fs-write", "shell");
+            } else if (strcmp(input_buffer, "reboot") == 0) {
+                callservice("reboot", "shell");
+            } else if (strcmp(input_buffer, "mem-info") == 0) {
+                callservice("mem-info", "shell");
             } else if (strcmp(input_buffer, "") != 0) {
-                kprint("Command not recognized. Open a PR or issue to add it!");
+                kprint("Command not recognized. Type 'help' for available commands!");
             }
 
             input_index = 0;
@@ -401,13 +397,39 @@ char* rec_input(void) {
     static char temp_buffer[KEYBOARD_INPUT_LENGTH];
     int temp_index = 0;
     
+    // Clear the buffer
+    for (int i = 0; i < KEYBOARD_INPUT_LENGTH; i++) {
+        temp_buffer[i] = '\0';
+    }
+    
+    // Disable keyboard interrupts to avoid conflicts
+    write_port(0x21, 0xFF);
+    
+    // Flush keyboard buffer to clear any stale data
+    while (read_port(KEYBOARD_STATUS_PORT) & 0x01) {
+        read_port(KEYBOARD_DATA_PORT);
+    }
+    
     while(1) {
         unsigned char status = read_port(KEYBOARD_STATUS_PORT);
         if (status & 0x01) {
-            char keycode = read_port(KEYBOARD_DATA_PORT);
+            unsigned char keycode = read_port(KEYBOARD_DATA_PORT);
+            
+            // Send EOI to PIC
+            write_port(0x20, 0x20);
+            
+            // Ignore key release events (bit 7 set means key released)
+            if (keycode & 0x80) {
+                continue;
+            }
+            
             if (keycode == ENTER_KEY_CODE) {
                 temp_buffer[temp_index] = '\0';
                 kprint_newline();
+                
+                // Re-enable keyboard interrupts
+                write_port(0x21, 0xFD);
+                
                 return temp_buffer;
             }
 
@@ -432,13 +454,14 @@ void init_shell(void) {
     serial_init();  // Initialize serial port for debug output
     serial_write_string("[DEBUG] toastOS starting...\n");
     serial_write_string("[DEBUG] Serial port initialized\n");
-    
+
+    init_services();
     clear_screen();
+    
     kprint("Welcome to toastOS!");
     kprint_newline();
     kprint("toastOS > ");
     enable_cursor(0, 15);
-    
     serial_write_string("[DEBUG] Setting up IDT...\n");
     idt_init();
     serial_write_string("[DEBUG] Initializing keyboard...\n");

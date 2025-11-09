@@ -1,4 +1,7 @@
 /* show me carfax.com */
+#ifndef FUNCS_H
+#define FUNCS_H
+
 #include "stdint.h"
 
 static inline int strcmp(const char *s1, const char *s2) {
@@ -65,3 +68,5 @@ static void kprint_int(int n) {
     char digit = (n % 10) + '0';
     serial_write_char(digit);
 }
+
+#endif // FUNCS_H

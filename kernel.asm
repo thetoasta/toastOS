@@ -31,7 +31,10 @@ isr_common_stub:
     mov fs, ax
     mov gs, ax
     
+    mov eax, [esp + 36]  ; Get interrupt number from stack (after pusha and ds push)
+    push eax
     call isr_handler
+    add esp, 4
     
     pop eax
     mov ds, ax
