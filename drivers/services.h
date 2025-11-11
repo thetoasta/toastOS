@@ -10,6 +10,8 @@
 #include "stdint.h"
 #include "file.h"
 #include "string.h"
+#include "rtc.h"
+#include "registry.h"
 
 #define MAX_SERVICES 32
 #define MAX_SERVICE_NAME 16
@@ -26,6 +28,9 @@ typedef struct {
 static service_t services[MAX_SERVICES];
 static int service_count = 0;
 
+// Secure lock - when enabled, blocks all services except unlock
+static int secure_lock_enabled = 0;
+
 // Forward declarations
 static inline void list_services();
 
@@ -35,23 +40,11 @@ static inline void service_fta(const char* host) {
 }
 
 static inline void service_shutdown(const char* host) {
-    kprint("The host, '");
-    kprint(host);
-    kprint("' requested to shutdown the system via a service.");
-    kprint_newline();
-    kprint("Type enter to allow this shutdown.");
-    kprint_newline();
-    char* input = rec_input();
-    if (strcmp(input, "") == 0) {
         kprint("Shutting down as requested by host '");
         kprint(host);
         kprint("'.");
         kprint_newline();
         shutdown();
-    } else {
-        kprint("Denied shutdown.");
-        kprint_newline();
-    }
 }
 
 // Filesystem services
@@ -147,6 +140,188 @@ static inline void service_memory_info(const char* host) {
     kprint_newline();
 }
 
+// Time/Date services
+static inline void service_time(const char* host) {
+    kprint("Current time: ");
+    rtc_print_time();
+    kprint_newline();
+}
+
+static inline void service_date(const char* host) {
+    kprint("Current date: ");
+    rtc_print_date();
+    kprint_newline();
+}
+
+static inline void service_datetime(const char* host) {
+    kprint("Current date and time:");
+    kprint_newline();
+    rtc_print_datetime();
+    kprint_newline();
+}
+
+static inline void service_timezone(const char* host) {
+    kprint("Enter timezone offset from UTC (e.g., -5 for EST, -8 for PST): ");
+    char* input = rec_input();
+    
+    // Simple conversion (handle negative)
+    int offset = 0;
+    int negative = 0;
+    int i = 0;
+    
+    if (input[0] == '-') {
+        negative = 1;
+        i = 1;
+    }
+    
+    while (input[i] >= '0' && input[i] <= '9') {
+        offset = offset * 10 + (input[i] - '0');
+        i++;
+    }
+    
+    if (negative) {
+        offset = -offset;
+    }
+    
+    rtc_set_timezone(offset);
+    kprint("Timezone set to UTC");
+    if (offset >= 0) kprint("+");
+    kprint_int(offset);
+    kprint_newline();
+}
+
+// Service management
+static inline void service_disable(const char* host) {
+    kprint("Enter service name to disable: ");
+    char* name = rec_input();
+    
+    for (int i = 0; i < service_count; i++) {
+        if (strcmp(services[i].name, name) == 0) {
+            if (strcmp(name, "help") == 0 || strcmp(name, "svc-enable") == 0) {
+                kprint("Service is protected by CORE_SERVICE and cannot be disabled.");
+                kprint_newline();
+                return;
+            }
+            services[i].active = 0;
+            kprint("Service '");
+            kprint(name);
+            kprint("' disabled.");
+            kprint_newline();
+            return;
+        }
+    }
+    
+    kprint("Service not found.");
+    kprint_newline();
+}
+
+static inline void service_enable(const char* host) {
+    kprint("Enter service name to enable: ");
+    char* name = rec_input();
+    
+    for (int i = 0; i < service_count; i++) {
+        if (strcmp(services[i].name, name) == 0) {
+            services[i].active = 1;
+            kprint("Service '");
+            kprint(name);
+            kprint("' enabled.");
+            kprint_newline();
+            return;
+        }
+    }
+    
+    kprint("Service not found.");
+    kprint_newline();
+}
+
+static inline void service_list_all(const char* host) {
+    kprint("=== Registered Services ===");
+    kprint_newline();
+    for (int i = 0; i < service_count; i++) {
+        kprint("  ");
+        kprint(services[i].name);
+        if (services[i].requires_auth) {
+            kprint(" [REQUIRES AUTH]");
+        }
+        if (!services[i].active) {
+            kprint(" [MANUALLY DISABLED]");
+        }
+        kprint_newline();
+    }
+    
+    if (secure_lock_enabled) {
+        kprint_newline();
+        kprint("WARNING: SECURE LOCK IS ENABLED");
+        kprint_newline();
+        kprint("All services are blocked. Restart required to restore.");
+        kprint_newline();
+    }
+}
+
+// Secure lock services
+static inline void service_secure_lock(const char* host) {
+    secure_lock_enabled = 1;
+    registry_set("security.lock", "1");
+    kprint("SECURE LOCK ENABLED");
+    kprint_newline();
+    kprint("All services are now permanently blocked.");
+    kprint_newline();
+    kprint("System restart required to restore access.");
+    kprint_newline();
+}
+
+// Registry services
+static inline void service_registry_list(const char* host) {
+    registry_list();
+}
+
+static inline void service_registry_get(const char* host) {
+    kprint("Enter key name: ");
+    char* key = rec_input();
+    const char* value = registry_get(key);
+    
+    if (value) {
+        kprint("Value: ");
+        kprint(value);
+        kprint_newline();
+    } else {
+        kprint("Key not found.");
+        kprint_newline();
+    }
+}
+
+static inline void service_registry_set(const char* host) {
+    kprint("Enter key name: ");
+    char* key = rec_input();
+    kprint("Enter value: ");
+    char* value = rec_input();
+    
+    if (registry_set(key, value) == 0) {
+        kprint("Registry key set successfully.");
+        kprint_newline();
+    } else {
+        kprint("Failed to set registry key (registry full).");
+        kprint_newline();
+    }
+}
+
+static inline void service_registry_delete(const char* host) {
+    kprint("Enter key name to delete: ");
+    char* key = rec_input();
+    
+    if (registry_delete(key) == 0) {
+        kprint("Registry key deleted.");
+        kprint_newline();
+    } else {
+        kprint("Key not found.");
+        kprint_newline();
+    }
+}
+
+static inline void service_registry_save(const char* host) {
+    registry_save();
+}
+
 // Register a service
 static inline int register_service(const char* name, service_handler_t handler, int requires_auth) {
     if (service_count >= MAX_SERVICES) {
@@ -173,7 +348,7 @@ static inline void init_services() {
     
     // Filesystem services
     register_service("fta", service_fta, 0);
-    register_service("fs-write", service_fs_write, 1);
+    register_service("fs-write", service_fs_write, 0);
     register_service("fs-read", service_fs_read, 0);
     register_service("fs-delete", service_fs_delete, 1);
     register_service("fs-list", service_fs_list, 0);
@@ -185,9 +360,28 @@ static inline void init_services() {
     register_service("color", service_set_color, 0);
     
     // Debug services
-    register_service("panic-test", service_panic_test, 1);
-    register_service("dbg-except", service_exception_test, 1);
+    register_service("panic-test", service_panic_test, 0);
+    register_service("dbg-except", service_exception_test, 0);
     register_service("mem-info", service_memory_info, 0);
+    
+    // Time/Date services
+    register_service("time", service_time, 0);
+    register_service("date", service_date, 0);
+    register_service("datetime", service_datetime, 0);
+    register_service("timezone", service_timezone, 0);
+    
+    // Service management
+    register_service("svc-disable", service_disable, 1);
+    register_service("svc-enable", service_enable, 1);
+    register_service("svc-list", service_list_all, 0);
+    register_service("securelock", service_secure_lock, 1);
+    
+    // Registry services
+    register_service("registry-list", service_registry_list, 0);
+    register_service("registry-get", service_registry_get, 0);
+    register_service("registry-set", service_registry_set, 1);
+    register_service("registry-delete", service_registry_delete, 1);
+    register_service("registry-save", service_registry_save, 1);
     
     kprint("[SERVICES] Registered ");
     kprint_int(service_count);
@@ -199,18 +393,44 @@ static inline void init_services() {
 static inline void callservice(const char* service_name, const char* host) {
     kprint_newline();
     
+    // Check if secure lock is enabled
+    if (secure_lock_enabled) {
+        kprint("ERROR: System is in SECURE LOCK mode.");
+        kprint_newline();
+        kprint("All services are permanently blocked. Restart required.");
+        kprint_newline();
+        return;
+    }
+    
     for (int i = 0; i < service_count; i++) {
         if (strcmp(services[i].name, service_name) == 0) {
-            if (services[i].active) {
-                services[i].handler(host);
-                return;
-            } else {
+            if (!services[i].active) {
                 kprint("ERROR: Service '");
                 kprint(service_name);
                 kprint("' is disabled.");
                 kprint_newline();
                 return;
             }
+            
+            // Check if authentication is required
+            if (services[i].requires_auth) {
+                kprint("The host, '");
+                kprint(host);
+                kprint("' requested to use service '");
+                kprint(service_name);
+                kprint("'.");
+                kprint_newline();
+                kprint("Type 'y' to authorize: ");
+                char* auth = rec_input();
+                if (strcmp(auth, "y") != 0) {
+                    kprint("Authorization denied.");
+                    kprint_newline();
+                    return;
+                }
+            }
+            
+            services[i].handler(host);
+            return;
         }
     }
     
@@ -225,19 +445,84 @@ static inline void callservice(const char* service_name, const char* host) {
 
 // List all available services
 static inline void list_services() {
-    kprint("Available services:");
+    kprint("=== toastOS v1.1 - Available Commands ===");
     kprint_newline();
-    for (int i = 0; i < service_count; i++) {
-        kprint("  - ");
-        kprint(services[i].name);
-        if (services[i].requires_auth) {
-            kprint(" (requires auth)");
-        }
-        if (!services[i].active) {
-            kprint(" [DISABLED]");
-        }
-        kprint_newline();
-    }
+    kprint_newline();
+    
+    kprint("SYSTEM:");
+    kprint_newline();
+    kprint("  help       - Show this help");
+    kprint_newline();
+    kprint("  clear      - Clear screen");
+    kprint_newline();
+    kprint("  shutdown   - Power off (requires auth)");
+    kprint_newline();
+    kprint("  reboot     - Restart system (requires auth)");
+    kprint_newline();
+    kprint_newline();
+    
+    kprint("FILESYSTEM:");
+    kprint_newline();
+    kprint("  fs-list    - List all files");
+    kprint_newline();
+    kprint("  write      - Create/write a file");
+    kprint_newline();
+    kprint("  read       - Read a file");
+    kprint_newline();
+    kprint("  fs-autotest - Run filesystem test");
+    kprint_newline();
+    kprint_newline();
+    
+    kprint("DEBUG:");
+    kprint_newline();
+    kprint("  panic      - Trigger panic test");
+    kprint_newline();
+    kprint("  db0f       - Trigger divide-by-zero exception");
+    kprint_newline();
+    kprint("  bomb       - Trigger security lockdown");
+    kprint_newline();
+    kprint_newline();
+    
+    kprint("TIME/DATE:");
+    kprint_newline();
+    kprint("  time       - Show current time");
+    kprint_newline();
+    kprint("  date       - Show current date");
+    kprint_newline();
+    kprint("  datetime   - Show date and time");
+    kprint_newline();
+    kprint("  timezone   - Set timezone offset");
+    kprint_newline();
+    kprint_newline();
+    
+    kprint("SERVICES:");
+    kprint_newline();
+    kprint("  svc-list    - List all services");
+    kprint_newline();
+    kprint("  svc-disable - Disable a service (requires auth)");
+    kprint_newline();
+    kprint("  svc-enable  - Enable a service (requires auth)");
+    kprint_newline();
+    kprint("  securelock  - PERMANENTLY lock ALL services (requires auth)");
+    kprint_newline();
+    kprint_newline();
+    
+    kprint("REGISTRY:");
+    kprint_newline();
+    kprint("  reg-list    - View all registry entries");
+    kprint_newline();
+    kprint("  reg-get     - Get a registry value");
+    kprint_newline();
+    kprint("  reg-set     - Set a registry value (requires auth)");
+    kprint_newline();
+    kprint("  reg-delete  - Delete a registry entry (requires auth)");
+    kprint_newline();
+    kprint("  reg-save    - Save registry to disk (requires auth)");
+    kprint_newline();
+    kprint_newline();
+    
+    kprint("Type any command and press ENTER");
+    kprint_newline();
 }
 
 #endif // SERVICES_H

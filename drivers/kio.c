@@ -27,9 +27,16 @@ void exceptionCheck() {
 #define KERNEL_CODE_SEGMENT_OFFSET 0x08
 #define KEYBOARD_INPUT_LENGTH 256
 #define ENTER_KEY_CODE 0x1C
+#define HISTORY_SIZE 10
 
 char input_buffer[KEYBOARD_INPUT_LENGTH];
 unsigned int input_index = 0;
+
+// Command history
+char command_history[HISTORY_SIZE][KEYBOARD_INPUT_LENGTH];
+int history_count = 0;
+int history_index = -1;
+int browsing_history = 0;
 
 unsigned int current_loc = 0;
 char *vidptr = (char*)0xb8000;
@@ -76,9 +83,6 @@ extern void isr31(void);
 
 struct IDT_entry IDT[IDT_SIZE];
 
-static inline void outw(unsigned short port, unsigned short val) {
-    __asm__ volatile ("outw %0, %1" : : "a"(val), "Nd"(port));
-}
 
 void accept_fs_write() {
     kprint("toastFS Opened. What do you want the FILENAME to be?");
@@ -128,7 +132,7 @@ void isr_handler(unsigned int interrupt_number) {
     };
 
     // Output to serial port (terminal)
-    serial_write_string("\n\n=================================\n");
+    serial_write_string("\n=================================\n");
     serial_write_string("!!! CPU EXCEPTION DETECTED !!!\n");
     serial_write_string("=================================\n");
     serial_write_string("Exception #");
@@ -319,6 +323,31 @@ void keyboard_handler_main(void) {
             
             kprint_newline();
             input_buffer[input_index] = '\0';
+            
+            // Add non-empty commands to history
+            if (input_index > 0 && strcmp(input_buffer, "") != 0) {
+                // Shift history if full
+                if (history_count >= HISTORY_SIZE) {
+                    for (int i = 0; i < HISTORY_SIZE - 1; i++) {
+                        for (int j = 0; j < KEYBOARD_INPUT_LENGTH; j++) {
+                            command_history[i][j] = command_history[i + 1][j];
+                        }
+                    }
+                    history_count = HISTORY_SIZE - 1;
+                }
+                
+                // Add command to history
+                for (int i = 0; i < input_index; i++) {
+                    command_history[history_count][i] = input_buffer[i];
+                }
+                command_history[history_count][input_index] = '\0';
+                history_count++;
+            }
+            
+            // Reset history browsing
+            history_index = -1;
+            browsing_history = 0;
+            
             if (current_loc >= SCREENSIZE) {
                 clear_screen();
             }
@@ -363,6 +392,32 @@ void keyboard_handler_main(void) {
                 callservice("reboot", "shell");
             } else if (strcmp(input_buffer, "mem-info") == 0) {
                 callservice("mem-info", "shell");
+            } else if (strcmp(input_buffer, "svc-disable") == 0) {
+                callservice("svc-disable", "shell");
+            } else if (strcmp(input_buffer, "svc-enable") == 0) {
+                callservice("svc-enable", "shell");
+            } else if (strcmp(input_buffer, "svc-list") == 0) {
+                callservice("svc-list", "shell");
+            } else if (strcmp(input_buffer, "securelock") == 0) {
+                callservice("securelock", "shell");
+            } else if (strcmp(input_buffer, "time") == 0) {
+                callservice("time", "shell");
+            } else if (strcmp(input_buffer, "date") == 0) {
+                callservice("date", "shell");
+            } else if (strcmp(input_buffer, "datetime") == 0) {
+                callservice("datetime", "shell");
+            } else if (strcmp(input_buffer, "timezone") == 0) {
+                callservice("timezone", "shell");
+            } else if (strcmp(input_buffer, "reg-list") == 0) {
+                callservice("registry-list", "shell");
+            } else if (strcmp(input_buffer, "reg-get") == 0) {
+                callservice("registry-get", "shell");
+            } else if (strcmp(input_buffer, "reg-set") == 0) {
+                callservice("registry-set", "shell");
+            } else if (strcmp(input_buffer, "reg-delete") == 0) {
+                callservice("registry-delete", "shell");
+            } else if (strcmp(input_buffer, "reg-save") == 0) {
+                callservice("registry-save", "shell");
             } else if (strcmp(input_buffer, "") != 0) {
                 kprint("Command not recognized. Type 'help' for available commands!");
             }
@@ -370,6 +425,93 @@ void keyboard_handler_main(void) {
             input_index = 0;
             kprint_newline();
             kprint("toastOS > ");
+            return;
+
+    const char* securesystem = registry_get("toast.secure.ab");
+
+    // Check if the key was found
+    if (securesystem != "enab") {
+        securecode = 0;
+    } else {
+        return;
+    }
+            
+        }
+        
+        // Handle arrow keys (extended scancodes start with 0xE0)
+        static int extended = 0;
+        if (keycode == 0xE0) {
+            extended = 1;
+            return;
+        }
+        
+        if (extended) {
+            extended = 0;
+            
+            // Up arrow (0x48)
+            if (keycode == 0x48 && history_count > 0) {
+                // Clear current line
+                while (input_index > 0) {
+                    input_index--;
+                    current_loc -= 2;
+                    vidptr[current_loc] = ' ';
+                    vidptr[current_loc + 1] = 0x07;
+                }
+                
+                // Navigate history
+                if (!browsing_history) {
+                    history_index = history_count - 1;
+                    browsing_history = 1;
+                } else if (history_index > 0) {
+                    history_index--;
+                }
+                
+                // Load command from history
+                const char* cmd = command_history[history_index];
+                input_index = 0;
+                while (cmd[input_index] != '\0') {
+                    input_buffer[input_index] = cmd[input_index];
+                    vidptr[current_loc++] = cmd[input_index];
+                    vidptr[current_loc++] = 0x07;
+                    input_index++;
+                }
+                update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
+                return;
+            }
+            
+            // Down arrow (0x50)
+            if (keycode == 0x50 && browsing_history) {
+                // Clear current line
+                while (input_index > 0) {
+                    input_index--;
+                    current_loc -= 2;
+                    vidptr[current_loc] = ' ';
+                    vidptr[current_loc + 1] = 0x07;
+                }
+                
+                // Navigate forward in history
+                if (history_index < history_count - 1) {
+                    history_index++;
+                    
+                    // Load command from history
+                    const char* cmd = command_history[history_index];
+                    input_index = 0;
+                    while (cmd[input_index] != '\0') {
+                        input_buffer[input_index] = cmd[input_index];
+                        vidptr[current_loc++] = cmd[input_index];
+                        vidptr[current_loc++] = 0x07;
+                        input_index++;
+                    }
+                } else {
+                    // Reached newest, clear input
+                    browsing_history = 0;
+                    history_index = -1;
+                    input_index = 0;
+                }
+                update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
+                return;
+            }
+            
             return;
         }
 
@@ -381,11 +523,13 @@ void keyboard_handler_main(void) {
             vidptr[current_loc] = ' '; // Clear the character on screen
             vidptr[current_loc + 1] = 0x07; // Reset attribute byte
             update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
+            browsing_history = 0; // Exit history mode when typing
         } else if (c && input_index < KEYBOARD_INPUT_LENGTH - 1) {
             input_buffer[input_index++] = c;
             vidptr[current_loc++] = c;
             vidptr[current_loc++] = 0x07;
             update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
+            browsing_history = 0; // Exit history mode when typing
         }
         // you can turn off securecodes by not typing bomb but you cant idk what i'm rambling abyt
         // check for a scancode, just type bomb! it will set securecode to 0, causing the os to panic halt

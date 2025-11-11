@@ -29,6 +29,22 @@ static inline uint8_t inb(uint16_t port)
     /* same as well for inb */
 }
 
+// 16-bit port I/O for disk operations
+static inline void outw(uint16_t port, uint16_t val)
+{
+    __asm__ volatile ( "outw %w0, %w1" : : "a"(val), "Nd"(port) : "memory");
+}
+
+static inline uint16_t inw(uint16_t port)
+{
+    uint16_t ret;
+    __asm__ volatile ( "inw %w1, %w0"
+                   : "=a"(ret)
+                   : "Nd"(port)
+                   : "memory");
+    return ret;
+}
+
 // Serial port functions for debug output
 #define SERIAL_PORT 0x3F8
 
