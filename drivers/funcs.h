@@ -45,6 +45,22 @@ static inline uint16_t inw(uint16_t port)
     return ret;
 }
 
+// 32-bit port I/O for PCI and network operations
+static inline void outl(uint16_t port, uint32_t val)
+{
+    __asm__ volatile ( "outl %0, %w1" : : "a"(val), "Nd"(port) : "memory");
+}
+
+static inline uint32_t inl(uint16_t port)
+{
+    uint32_t ret;
+    __asm__ volatile ( "inl %w1, %0"
+                   : "=a"(ret)
+                   : "Nd"(port)
+                   : "memory");
+    return ret;
+}
+
 // Serial port functions for debug output
 #define SERIAL_PORT 0x3F8
 

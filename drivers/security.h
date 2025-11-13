@@ -19,6 +19,6 @@ static inline void check_securecode() {
         kprint_newline();
         clear_screen();
         toast_shell_color("toastSecure Code was changed. ", RED);
-        callservice("shutdown", "Toast Security Service");
+        callservice("shutdown", "Toast Secure Service");
      }
 }

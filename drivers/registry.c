@@ -10,6 +10,7 @@ static int registry_count = 0;
 
 // Initialize registry
 void registry_init(void) {
+    serial_write_string("[REGISTRY] Initializing registry system...\n");
     for (int i = 0; i < MAX_REGISTRY_KEYS; i++) {
         registry[i].active = 0;
         registry[i].key[0] = '\0';
@@ -17,16 +18,19 @@ void registry_init(void) {
     }
     registry_count = 0;
     
+    serial_write_string("[REGISTRY] Setting default values...\n");
     // Set default values
     registry_set("os.name", "toastOS");
     registry_set("os.version", "1.1");
     registry_set("timezone.offset", "-5");
     registry_set("security.lock", "0");
     registry_set("toast.secure.ab", "enab");
+    serial_write_string("[REGISTRY] Initialization complete\n");
 }
 
 // Save registry to disk
 void registry_save(void) {
+    serial_write_string("[REGISTRY] Saving to disk...\n");
     uint8_t buffer[SECTOR_SIZE];
     memset(buffer, 0, SECTOR_SIZE);
     
@@ -63,9 +67,13 @@ void registry_save(void) {
     
     // Write to disk
     if (disk_write_sector(REGISTRY_SECTOR, buffer) == 0) {
+        serial_write_string("[REGISTRY] Successfully saved to sector ");
+        kprint_int(REGISTRY_SECTOR);
+        serial_write_string("\n");
         kprint("Registry saved to disk.");
         kprint_newline();
     } else {
+        serial_write_string("[REGISTRY] ERROR: Failed to write to disk\n");
         kprint("Warning: Could not save registry to disk (no persistent storage).");
         kprint_newline();
     }

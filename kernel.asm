@@ -8,6 +8,7 @@ section .text
 
 global start
 global keyboard_handler
+global timer_handler
 global read_port
 global write_port
 global load_idt
@@ -18,6 +19,7 @@ global isr24, isr25, isr26, isr27, isr28, isr29, isr30, isr31
 
 extern kmain 		;this is defined in the c file
 extern keyboard_handler_main
+extern timer_handler_main
 extern isr_handler
 
 ; ISR common stub
@@ -249,6 +251,14 @@ load_idt:
 
 keyboard_handler:
     call    keyboard_handler_main
+    iretd
+
+timer_handler:
+    pusha
+    call    timer_handler_main
+    mov al, 0x20
+    out 0x20, al        ; Send EOI to PIC
+    popa
     iretd
 
 start:

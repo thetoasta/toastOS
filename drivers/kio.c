@@ -1,10 +1,13 @@
 #include "kio.h"
 #include "funcs.h"
 #include "panic.h"
+#include "netcmd.h"
 #include "stdint.h"
 #include "file.h"
 #include "security.h"
 #include "services.h"
+#include "rtc.h"
+#include "apps.h"
 
 int exceptionCount = 0;
 
@@ -32,6 +35,10 @@ void exceptionCheck() {
 char input_buffer[KEYBOARD_INPUT_LENGTH];
 unsigned int input_index = 0;
 
+// Shift and caps lock state
+static int shift_pressed = 0;
+static int caps_lock = 0;
+
 // Command history
 char command_history[HISTORY_SIZE][KEYBOARD_INPUT_LENGTH];
 int history_count = 0;
@@ -42,10 +49,33 @@ unsigned int current_loc = 0;
 char *vidptr = (char*)0xb8000;
 
 extern unsigned char keyboard_map[128];
+extern unsigned char keyboard_map_shifted[128];
 extern void keyboard_handler(void);
+extern void timer_handler(void);
 extern char read_port(unsigned short port);
 extern void write_port(unsigned short port, unsigned char data);
 extern void load_idt(unsigned long *idt_ptr);
+
+// Get character with shift/caps lock handling
+static inline char get_char_from_keycode(unsigned char keycode) {
+    char c;
+    
+    // Get base character
+    if (shift_pressed) {
+        c = keyboard_map_shifted[keycode];
+    } else {
+        c = keyboard_map[keycode];
+    }
+    
+    // Apply caps lock for letters only
+    if (caps_lock && c >= 'a' && c <= 'z') {
+        c = c - 32; // Convert to uppercase
+    } else if (caps_lock && c >= 'A' && c <= 'Z') {
+        c = c + 32; // Convert to lowercase
+    }
+    
+    return c;
+}
 
 // External ISR declarations
 extern void isr0(void);
@@ -253,6 +283,10 @@ void idt_init(void) {
     unsigned long keyboard_address = (unsigned long)keyboard_handler;
     set_idt_gate(0x21, keyboard_address);
 
+    // Register timer handler (IRQ0 = ISR 32 = 0x20)
+    unsigned long timer_address = (unsigned long)timer_handler;
+    set_idt_gate(0x20, timer_address);
+
     // PIC Initialization
     write_port(0x20, 0x11);
     write_port(0xA0, 0x11);
@@ -275,13 +309,55 @@ void idt_init(void) {
 }
 
 void kb_init(void) {
-    // Enable only IRQ1 (keyboard)
-    write_port(0x21, 0xFD);
+    // Enable IRQ0 (timer) and IRQ1 (keyboard)
+    write_port(0x21, 0xFC);  // 0xFC = 11111100 (bits 0 and 1 clear)
 }
 
 void kprint(const char *str) {
     unsigned int i = 0;
     while (str[i]) {
+        // Handle newline character
+        if (str[i] == '\n') {
+            kprint_newline();
+            i++;
+            continue;
+        }
+        
+        // Don't overwrite clock area (line 0, columns 63-79)
+        int current_x = (current_loc / 2) % COLUMNS_IN_LINE;
+        int current_y = (current_loc / 2) / COLUMNS_IN_LINE;
+        if (current_y == 0 && current_x >= 63) {
+            // Skip to next line to preserve clock
+            current_loc = BYTES_PER_ELEMENT * COLUMNS_IN_LINE;
+        }
+        
+        // Auto-scroll if we're at the bottom
+        if (current_loc >= SCREENSIZE) {
+            // Scroll up by one line, but preserve line 0 (clock area)
+            // Save line 0
+            char line0_backup[BYTES_PER_ELEMENT * COLUMNS_IN_LINE];
+            for (unsigned int j = 0; j < BYTES_PER_ELEMENT * COLUMNS_IN_LINE; j++) {
+                line0_backup[j] = vidptr[j];
+            }
+            
+            // Scroll up
+            for (unsigned int j = 0; j < SCREENSIZE - (BYTES_PER_ELEMENT * COLUMNS_IN_LINE); j++) {
+                vidptr[j] = vidptr[j + (BYTES_PER_ELEMENT * COLUMNS_IN_LINE)];
+            }
+            
+            // Clear last line
+            for (unsigned int j = SCREENSIZE - (BYTES_PER_ELEMENT * COLUMNS_IN_LINE); j < SCREENSIZE; j += 2) {
+                vidptr[j] = ' ';
+                vidptr[j + 1] = 0x07;
+            }
+            
+            // Restore line 0
+            for (unsigned int j = 0; j < BYTES_PER_ELEMENT * COLUMNS_IN_LINE; j++) {
+                vidptr[j] = line0_backup[j];
+            }
+            
+            current_loc = SCREENSIZE - (BYTES_PER_ELEMENT * COLUMNS_IN_LINE);
+        }
         vidptr[current_loc++] = str[i++];
         vidptr[current_loc++] = 0x07; // attribute byte
     }
@@ -293,18 +369,48 @@ void kprint(const char *str) {
 void kprint_newline(void) {
     unsigned int line_size = BYTES_PER_ELEMENT * COLUMNS_IN_LINE;
     current_loc += (line_size - (current_loc % line_size));
+    
+    // Auto-scroll if we're past the bottom
+    if (current_loc >= SCREENSIZE) {
+        // Scroll up by one line
+        for (unsigned int j = 0; j < SCREENSIZE - line_size; j++) {
+            vidptr[j] = vidptr[j + line_size];
+        }
+        // Clear last line
+        for (unsigned int j = SCREENSIZE - line_size; j < SCREENSIZE; j += 2) {
+            vidptr[j] = ' ';
+            vidptr[j + 1] = 0x07;
+        }
+        current_loc = SCREENSIZE - line_size;
+    }
+    
     int x = (current_loc / 2) % COLUMNS_IN_LINE;
     int y = (current_loc / 2) / COLUMNS_IN_LINE;
     update_cursor(x, y);
 }
 
 void clear_screen(void) {
+    // Clear screen but preserve line 0 (clock area)
+    // Save line 0
+    char line0_backup[BYTES_PER_ELEMENT * COLUMNS_IN_LINE];
+    for (unsigned int j = 0; j < BYTES_PER_ELEMENT * COLUMNS_IN_LINE; j++) {
+        line0_backup[j] = vidptr[j];
+    }
+    
+    // Clear entire screen
     for (unsigned int i = 0; i < SCREENSIZE; i += 2) {
         vidptr[i] = ' ';
         vidptr[i + 1] = 0x07;
     }
-    current_loc = 0;
-    update_cursor(0, 0);
+    
+    // Restore line 0
+    for (unsigned int j = 0; j < BYTES_PER_ELEMENT * COLUMNS_IN_LINE; j++) {
+        vidptr[j] = line0_backup[j];
+    }
+    
+    // Start printing from line 1
+    current_loc = BYTES_PER_ELEMENT * COLUMNS_IN_LINE;
+    update_cursor(0, 1);
 }
 
 void keyboard_handler_main(void) {
@@ -314,131 +420,7 @@ void keyboard_handler_main(void) {
     if (status & 0x01) {
         unsigned char keycode = read_port(KEYBOARD_DATA_PORT);
         
-        // Ignore key release events (bit 7 set means key released)
-        if (keycode & 0x80) {
-            return;
-        }
-        
-        if (keycode == ENTER_KEY_CODE) {
-            
-            kprint_newline();
-            input_buffer[input_index] = '\0';
-            
-            // Add non-empty commands to history
-            if (input_index > 0 && strcmp(input_buffer, "") != 0) {
-                // Shift history if full
-                if (history_count >= HISTORY_SIZE) {
-                    for (int i = 0; i < HISTORY_SIZE - 1; i++) {
-                        for (int j = 0; j < KEYBOARD_INPUT_LENGTH; j++) {
-                            command_history[i][j] = command_history[i + 1][j];
-                        }
-                    }
-                    history_count = HISTORY_SIZE - 1;
-                }
-                
-                // Add command to history
-                for (int i = 0; i < input_index; i++) {
-                    command_history[history_count][i] = input_buffer[i];
-                }
-                command_history[history_count][input_index] = '\0';
-                history_count++;
-            }
-            
-            // Reset history browsing
-            history_index = -1;
-            browsing_history = 0;
-            
-            if (current_loc >= SCREENSIZE) {
-                clear_screen();
-            }
-            if (strcmp(input_buffer, "db0f") == 0) {
-                kprint("DB0 FAULT");
-                int a = 5/0;
-            } else if (strcmp(input_buffer, "clear") == 0) {
-                callservice("clear", "shell");
-            } else if (strcmp(input_buffer, "help") == 0) {
-                callservice("help", "shell");
-            } else if (strcmp(input_buffer, "read") == 0) {
-                callservice("fs-read", "shell");
-            } else if (strcmp(input_buffer, "bomb") == 0) {
-               kprint("DONT TYPE ANYTHING OS WILL BOMB!!");
-               kprint(" THIS ISNT GOOD YOU LAUNCHED A BOMB!");
-               serial_write_string("[SECURITY] toastSecure Code was changed from 1 to 0 in test. Next letter input will lock the OS.");
-               toast_shell_color(" lebron james is coming 4 u", YELLOW);
-               securecode = 0;
-            } else if (strcmp(input_buffer, "panic") == 0) {
-                callservice("panic-test", "shell");
-            } else if (strcmp(input_buffer, "mpanic") == 0) {
-                l3_panic("fatal panic");
-            } else if (strcmp(input_buffer, "fs-testfile") == 0) {
-                local_fs("testfile.txt", "This is a test file created in toastOS's local filesystem.");
-            } else if (strcmp(input_buffer, "fs-readfile") == 0) {
-                read_local_fs("testfile.txt-1");
-            } else if (strcmp(input_buffer, "fs-list") == 0) {
-                callservice("fs-list", "shell");
-            } else if (strcmp(input_buffer, "fs-autotest") == 0) {
-                callservice("fta", "shell");
-            } else if (strcmp(input_buffer, "cursor-enable") == 0) {
-                callservice("cursor-on", "shell");
-            } else if (strcmp(input_buffer, "cursor-disable") == 0) {
-                callservice("cursor-off", "shell");
-            } else if (strcmp(input_buffer, "fun printwithcolor") == 0) {
-                callservice("color", "shell");
-            } else if (strcmp(input_buffer, "shutdown") == 0) {
-                callservice("shutdown", "shell");
-            } else if (strcmp(input_buffer, "write") == 0) {
-                callservice("fs-write", "shell");
-            } else if (strcmp(input_buffer, "reboot") == 0) {
-                callservice("reboot", "shell");
-            } else if (strcmp(input_buffer, "mem-info") == 0) {
-                callservice("mem-info", "shell");
-            } else if (strcmp(input_buffer, "svc-disable") == 0) {
-                callservice("svc-disable", "shell");
-            } else if (strcmp(input_buffer, "svc-enable") == 0) {
-                callservice("svc-enable", "shell");
-            } else if (strcmp(input_buffer, "svc-list") == 0) {
-                callservice("svc-list", "shell");
-            } else if (strcmp(input_buffer, "securelock") == 0) {
-                callservice("securelock", "shell");
-            } else if (strcmp(input_buffer, "time") == 0) {
-                callservice("time", "shell");
-            } else if (strcmp(input_buffer, "date") == 0) {
-                callservice("date", "shell");
-            } else if (strcmp(input_buffer, "datetime") == 0) {
-                callservice("datetime", "shell");
-            } else if (strcmp(input_buffer, "timezone") == 0) {
-                callservice("timezone", "shell");
-            } else if (strcmp(input_buffer, "reg-list") == 0) {
-                callservice("registry-list", "shell");
-            } else if (strcmp(input_buffer, "reg-get") == 0) {
-                callservice("registry-get", "shell");
-            } else if (strcmp(input_buffer, "reg-set") == 0) {
-                callservice("registry-set", "shell");
-            } else if (strcmp(input_buffer, "reg-delete") == 0) {
-                callservice("registry-delete", "shell");
-            } else if (strcmp(input_buffer, "reg-save") == 0) {
-                callservice("registry-save", "shell");
-            } else if (strcmp(input_buffer, "") != 0) {
-                kprint("Command not recognized. Type 'help' for available commands!");
-            }
-
-            input_index = 0;
-            kprint_newline();
-            kprint("toastOS > ");
-            return;
-
-    const char* securesystem = registry_get("toast.secure.ab");
-
-    // Check if the key was found
-    if (securesystem != "enab") {
-        securecode = 0;
-    } else {
-        return;
-    }
-            
-        }
-        
-        // Handle arrow keys (extended scancodes start with 0xE0)
+        // Handle arrow keys (extended scancodes start with 0xE0) - MUST CHECK FIRST!
         static int extended = 0;
         if (keycode == 0xE0) {
             extended = 1;
@@ -514,8 +496,251 @@ void keyboard_handler_main(void) {
             
             return;
         }
+        
+        // Track shift key state (left shift = 0x2A, right shift = 0x36)
+        if (keycode == 0x2A || keycode == 0x36) {
+            shift_pressed = 1;
+            return;
+        }
+        if (keycode == 0xAA || keycode == 0xB6) { // Shift release
+            shift_pressed = 0;
+            return;
+        }
+        
+        // Track caps lock (0x3A)
+        if (keycode == 0x3A) {
+            caps_lock = !caps_lock;
+            return;
+        }
+        
+        // Ignore key release events (bit 7 set means key released)
+        if (keycode & 0x80) {
+            return;
+        }
+        
+        if (keycode == ENTER_KEY_CODE) {
+            
+            kprint_newline();
+            input_buffer[input_index] = '\0';
+            
+            serial_write_string("\n[INPUT] Command entered: ");
+            serial_write_string(input_buffer);
+            serial_write_string("\n");
+            
+            // Add non-empty commands to history
+            if (input_index > 0 && strcmp(input_buffer, "") != 0) {
+                serial_write_string("[HISTORY] Adding command to history\n");
+                // Shift history if full
+                if (history_count >= HISTORY_SIZE) {
+                    for (int i = 0; i < HISTORY_SIZE - 1; i++) {
+                        for (int j = 0; j < KEYBOARD_INPUT_LENGTH; j++) {
+                            command_history[i][j] = command_history[i + 1][j];
+                        }
+                    }
+                    history_count = HISTORY_SIZE - 1;
+                }
+                
+                // Add command to history
+                for (int i = 0; i < input_index; i++) {
+                    command_history[history_count][i] = input_buffer[i];
+                }
+                command_history[history_count][input_index] = '\0';
+                history_count++;
+            }
+            
+            // Reset history browsing
+            history_index = -1;
+            browsing_history = 0;
+            
+            if (current_loc >= SCREENSIZE) {
+                clear_screen();
+            }
+            if (strcmp(input_buffer, "db0f") == 0) {
+                kprint("DB0 FAULT");
+                int a = 5/0;
+            } else if (strcmp(input_buffer, "clear") == 0) {
+                callservice("clear", "shell");
+            } else if (strcmp(input_buffer, "help") == 0) {
+                callservice("help", "shell");
+            } else if (strcmp(input_buffer, "read") == 0) {
+                callservice("fs-read", "shell");
+            } else if (strcmp(input_buffer, "bomb") == 0) {
+               kprint("DONT TYPE ANYTHING OS WILL BOMB!!");
+               kprint(" THIS ISNT GOOD YOU LAUNCHED A BOMB!");
+               serial_write_string("[SECURITY] toastSecure Code was changed from 1 to 0 in test. Next letter input will lock the OS.");
+               toast_shell_color(" lebron james is coming 4 u", YELLOW);
+               securecode = 0;
+            } else if (strcmp(input_buffer, "panic") == 0) {
+                callservice("panic-test", "shell");
+            } else if (strcmp(input_buffer, "mpanic") == 0) {
+                l3_panic("fatal panic");
+            } else if (strcmp(input_buffer, "fs-testfile") == 0) {
+                local_fs("testfile.txt", "This is a test file created in toastOS's local filesystem.");
+            } else if (strcmp(input_buffer, "fs-readfile") == 0) {
+                read_local_fs("testfile.txt-1");
+            } else if (strcmp(input_buffer, "list") == 0) {
+                callservice("fs-list", "shell");
+            } else if (strcmp(input_buffer, "fs-list") == 0) {
+                callservice("fs-list", "shell");
+            } else if (strcmp(input_buffer, "fs-autotest") == 0) {
+                callservice("fta", "shell");
+            } else if (strcmp(input_buffer, "cursor-enable") == 0) {
+                callservice("cursor-on", "shell");
+            } else if (strcmp(input_buffer, "cursor-disable") == 0) {
+                callservice("cursor-off", "shell");
+            } else if (strcmp(input_buffer, "fun printwithcolor") == 0) {
+                callservice("color", "shell");
+            } else if (strcmp(input_buffer, "shutdown") == 0) {
+                callservice("shutdown", "shell");
+            } else if (strcmp(input_buffer, "write") == 0) {
+                callservice("fs-write", "shell");
+            } else if (strcmp(input_buffer, "reboot") == 0) {
+                callservice("reboot", "shell");
+            } else if (strcmp(input_buffer, "mem-info") == 0) {
+                callservice("mem-info", "shell");
+            } else if (strcmp(input_buffer, "svc-disable") == 0) {
+                callservice("svc-disable", "shell");
+            } else if (strcmp(input_buffer, "svc-enable") == 0) {
+                callservice("svc-enable", "shell");
+            } else if (strcmp(input_buffer, "svc-list") == 0) {
+                callservice("svc-list", "shell");
+            } else if (strcmp(input_buffer, "securelock") == 0) {
+                callservice("securelock", "shell");
+            } else if (strcmp(input_buffer, "time") == 0) {
+                callservice("time", "shell");
+            } else if (strcmp(input_buffer, "date") == 0) {
+                callservice("date", "shell");
+            } else if (strcmp(input_buffer, "datetime") == 0) {
+                callservice("datetime", "shell");
+            } else if (strcmp(input_buffer, "timezone") == 0) {
+                callservice("timezone", "shell");
+            } else if (strcmp(input_buffer, "reg-list") == 0) {
+                callservice("registry-list", "shell");
+            } else if (strcmp(input_buffer, "reg-get") == 0) {
+                callservice("registry-get", "shell");
+            } else if (strcmp(input_buffer, "reg-set") == 0) {
+                callservice("registry-set", "shell");
+            } else if (strcmp(input_buffer, "reg-delete") == 0) {
+                callservice("registry-delete", "shell");
+            } else if (strcmp(input_buffer, "reg-save") == 0) {
+                callservice("registry-save", "shell");
+            } else if (strcmp(input_buffer, "call") == 0) {
+                callservice("call", "shell");
+            } else if (strcmp(input_buffer, "edit") == 0) {
+                callservice("edit", "shell");
+            } else if (strcmp(input_buffer, "edit-open") == 0) {
+                callservice("edit-open", "shell");
+            } else if (strcmp(input_buffer, "apps") == 0) {
+                app_list();
+            } else if (strcmp(input_buffer, "ifconfig") == 0) {
+                network_ifconfig();
+            } else if (strncmp(input_buffer, "ping ", 5) == 0) {
+                network_ping(input_buffer + 5);
+            } else if (strcmp(input_buffer, "netstat") == 0) {
+                network_netstat();
+            } else if (strncmp(input_buffer, "setip ", 6) == 0) {
+                network_setip(input_buffer + 6);
+            } else if (strncmp(input_buffer, "run ", 4) == 0) {
+                // Extract app name after "run "
+                char* app_name = input_buffer + 4;
+                app_run(app_name);
+            } else if (strcmp(input_buffer, "") != 0) {
+                // Check if it's an app name they forgot to prefix with "run"
+                extern int app_exists(const char* name);
+                if (app_exists(input_buffer)) {
+                    toast_shell_color("Did you mean: ", YELLOW);
+                    toast_shell_color("run ", LIGHT_CYAN);
+                    toast_shell_color(input_buffer, LIGHT_GREEN);
+                    toast_shell_color("?", YELLOW);
+                    kprint_newline();
+                } else {
+                    kprint("Command not recognized. Type 'help' for available commands!");
+                }
+            }
 
-        char c = keyboard_map[(unsigned char)keycode];
+            input_index = 0;
+            kprint_newline();
+            toast_shell_color("toastOS > ", LIGHT_CYAN);
+            return;
+        }
+        
+        // Handle arrow keys (extended scancodes start with 0xE0)
+        if (keycode == 0xE0) {
+            extended = 1;
+            return;
+        }
+        
+        if (extended) {
+            extended = 0;
+            
+            // Up arrow (0x48)
+            if (keycode == 0x48 && history_count > 0) {
+                // Clear current line
+                while (input_index > 0) {
+                    input_index--;
+                    current_loc -= 2;
+                    vidptr[current_loc] = ' ';
+                    vidptr[current_loc + 1] = 0x07;
+                }
+                
+                // Navigate history
+                if (!browsing_history) {
+                    history_index = history_count - 1;
+                    browsing_history = 1;
+                } else if (history_index > 0) {
+                    history_index--;
+                }
+                
+                // Load command from history
+                const char* cmd = command_history[history_index];
+                input_index = 0;
+                while (cmd[input_index] != '\0') {
+                    input_buffer[input_index] = cmd[input_index];
+                    vidptr[current_loc++] = cmd[input_index];
+                    vidptr[current_loc++] = 0x07;
+                    input_index++;
+                }
+                update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
+                return;
+            }
+            
+            // Down arrow (0x50)
+            if (keycode == 0x50 && browsing_history) {
+                // Clear current line
+                while (input_index > 0) {
+                    input_index--;
+                    current_loc -= 2;
+                    vidptr[current_loc] = ' ';
+                    vidptr[current_loc + 1] = 0x07;
+                }
+                
+                // Navigate forward in history
+                if (history_index < history_count - 1) {
+                    history_index++;
+                    
+                    // Load command from history
+                    const char* cmd = command_history[history_index];
+                    input_index = 0;
+                    while (cmd[input_index] != '\0') {
+                        input_buffer[input_index] = cmd[input_index];
+                        vidptr[current_loc++] = cmd[input_index];
+                        vidptr[current_loc++] = 0x07;
+                        input_index++;
+                    }
+                } else {
+                    // Reached newest, clear input
+                    browsing_history = 0;
+                    history_index = -1;
+                    input_index = 0;
+                }
+                update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
+                return;
+            }
+            
+            return;
+        }
+
+        char c = get_char_from_keycode(keycode);
         if (c == '\b' && input_index > 0) {
             // Handle backspace: remove the last character from the buffer and screen
             input_index--;
@@ -562,6 +787,22 @@ char* rec_input(void) {
             // Send EOI to PIC
             write_port(0x20, 0x20);
             
+            // Track shift key state (left shift = 0x2A, right shift = 0x36)
+            if (keycode == 0x2A || keycode == 0x36) {
+                shift_pressed = 1;
+                continue;
+            }
+            if (keycode == 0xAA || keycode == 0xB6) { // Shift release
+                shift_pressed = 0;
+                continue;
+            }
+            
+            // Track caps lock (0x3A)
+            if (keycode == 0x3A) {
+                caps_lock = !caps_lock;
+                continue;
+            }
+            
             // Ignore key release events (bit 7 set means key released)
             if (keycode & 0x80) {
                 continue;
@@ -577,7 +818,7 @@ char* rec_input(void) {
                 return temp_buffer;
             }
 
-            char c = keyboard_map[(unsigned char)keycode];
+            char c = get_char_from_keycode(keycode);
             if (c == '\b' && temp_index > 0) {
                 temp_index--;
                 current_loc -= 2;
@@ -595,22 +836,51 @@ char* rec_input(void) {
 }
 
 void init_shell(void) {
-    serial_init();  // Initialize serial port for debug output
-    serial_write_string("[DEBUG] toastOS starting...\n");
-    serial_write_string("[DEBUG] Serial port initialized\n");
+    serial_write_string("\n");
+    serial_write_string("========================================\n");
+    serial_write_string("        toastOS Boot Sequence\n");
+    serial_write_string("========================================\n");
+    serial_write_string("[INIT] Serial port initialized\n");
+    serial_init();
 
+    serial_write_string("[INIT] Registering services...\n");
     init_services();
+    
+    serial_write_string("[INIT] Clearing screen...\n");
     clear_screen();
     
-    kprint("Welcome to toastOS!");
+    serial_write_string("[INIT] Displaying welcome message\n");
+    
+    // Display welcome banner (line 0 has clock, we start from line 1)
     kprint_newline();
-    kprint("toastOS > ");
+    toast_shell_color("    Welcome to toastOS v1.1!", LIGHT_GREEN);
+    kprint_newline();
+    kprint_newline();
+    
+    toast_shell_color("    Clock shows current time (UTC-5 EST)", YELLOW);
+    kprint_newline();
+    kprint("    Use 'timezone' command to change");
+    kprint_newline();
+    kprint_newline();
+    
+    kprint("Type 'help' for commands");
+    kprint_newline();
+    kprint_newline();
+    
+    toast_shell_color("toastOS > ", LIGHT_CYAN);
+    
+    serial_write_string("[INIT] Enabling cursor\n");
     enable_cursor(0, 15);
-    serial_write_string("[DEBUG] Setting up IDT...\n");
+    
+    serial_write_string("[INIT] Setting up Interrupt Descriptor Table (IDT)\n");
     idt_init();
-    serial_write_string("[DEBUG] Initializing keyboard...\n");
+    
+    serial_write_string("[INIT] Initializing keyboard controller\n");
     kb_init();
-    serial_write_string("[DEBUG] System ready!\n");
+    
+    serial_write_string("========================================\n");
+    serial_write_string("[INIT] System initialization complete!\n");
+    serial_write_string("========================================\n\n");
 }
 
 void panic_init(void) {
@@ -672,3 +942,122 @@ unsigned char keyboard_map[128] = {
     0, /* F12 */
     0  /* Undefined keys */
 };
+
+unsigned char keyboard_map_shifted[128] = {
+    0,  27, '!', '@', '#', '$', '%', '^', '&', '*',    /* 9 */
+    '(', ')', '_', '+', '\b',    /* Backspace */
+    '\t',            /* Tab */
+    'Q', 'W', 'E', 'R',  /* 19 */
+    'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',    /* Enter */
+    0,         /* Control */
+    'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':',    /* 39 */
+    '"', '~',   0,       /* Left shift */
+    '|', 'Z', 'X', 'C', 'V', 'B', 'N',           /* 49 */
+    'M', '<', '>', '?',   0,             /* Right shift */
+    '*',
+    0, /* Alt */
+    ' ', /* Space */
+    0, /* Caps lock */
+    0, /* F1 - F10 keys */
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, /* F10 */
+    0, /* Num lock */
+    0, /* Scroll lock */
+    0, /* Home */
+    0, /* Up Arrow */
+    0, /* Page Up */
+    '_',
+    0, /* Left Arrow */
+    0,
+    0, /* Right Arrow */
+    '+',
+    0, /* End */
+    0, /* Down Arrow */
+    0, /* Page Down */
+    0, /* Insert */
+    0, /* Delete */
+    0, 0, 0,
+    0, /* F11 */
+    0, /* F12 */
+    0  /* Undefined keys */
+};
+
+// Update clock display in top-right corner
+void update_clock_display(void) {
+    // Display time and date in top-right corner
+    // Time format: "HH:MM:SS" (8 chars)
+    // Date format: "MM/DD/YY" (8 chars)
+    // Total: 17 chars with space
+    
+    extern uint8_t rtc_read_seconds(void);
+    extern uint8_t rtc_read_minutes(void);
+    extern uint8_t rtc_read_hours(void);
+    extern uint8_t rtc_read_day(void);
+    extern uint8_t rtc_read_month(void);
+    extern uint8_t rtc_read_year(void);
+    extern int rtc_timezone_offset;
+    
+    // Read RTC values
+    uint8_t sec = rtc_read_seconds();
+    uint8_t min = rtc_read_minutes();
+    int hour = rtc_read_hours();
+    uint8_t day = rtc_read_day();
+    uint8_t month = rtc_read_month();
+    uint8_t year = rtc_read_year();
+    
+    // Apply timezone offset
+    hour += rtc_timezone_offset;
+    
+    // Handle day rollover
+    if (hour < 0) {
+        hour += 24;
+    } else if (hour >= 24) {
+        hour -= 24;
+    }
+    
+    // Position for time: right side of screen, line 0
+    // 80 chars wide, need 17 chars (8 time + 1 space + 8 date)
+    int time_pos = (0 * COLUMNS_IN_LINE + (COLUMNS_IN_LINE - 17)) * 2;
+    uint8_t color = 0x0E; // Yellow on black (more visible)
+    
+    // Display time: HH:MM:SS
+    vidptr[time_pos + 0] = '0' + (hour / 10);
+    vidptr[time_pos + 1] = color;
+    vidptr[time_pos + 2] = '0' + (hour % 10);
+    vidptr[time_pos + 3] = color;
+    vidptr[time_pos + 4] = ':';
+    vidptr[time_pos + 5] = color;
+    vidptr[time_pos + 6] = '0' + (min / 10);
+    vidptr[time_pos + 7] = color;
+    vidptr[time_pos + 8] = '0' + (min % 10);
+    vidptr[time_pos + 9] = color;
+    vidptr[time_pos + 10] = ':';
+    vidptr[time_pos + 11] = color;
+    vidptr[time_pos + 12] = '0' + (sec / 10);
+    vidptr[time_pos + 13] = color;
+    vidptr[time_pos + 14] = '0' + (sec % 10);
+    vidptr[time_pos + 15] = color;
+    
+    // Space between time and date
+    vidptr[time_pos + 16] = ' ';
+    vidptr[time_pos + 17] = color;
+    
+    // Display date: MM/DD/YY
+    vidptr[time_pos + 18] = '0' + (month / 10);
+    vidptr[time_pos + 19] = color;
+    vidptr[time_pos + 20] = '0' + (month % 10);
+    vidptr[time_pos + 21] = color;
+    vidptr[time_pos + 22] = '/';
+    vidptr[time_pos + 23] = color;
+    vidptr[time_pos + 24] = '0' + (day / 10);
+    vidptr[time_pos + 25] = color;
+    vidptr[time_pos + 26] = '0' + (day % 10);
+    vidptr[time_pos + 27] = color;
+    vidptr[time_pos + 28] = '/';
+    vidptr[time_pos + 29] = color;
+    vidptr[time_pos + 30] = '0' + (year / 10);
+    vidptr[time_pos + 31] = color;
+    vidptr[time_pos + 32] = '0' + (year % 10);
+    vidptr[time_pos + 33] = color;
+}
+

@@ -41,5 +41,11 @@ void rtc_print_time(void);
 void rtc_print_date(void);
 void rtc_print_datetime(void);
 const char* rtc_get_weekday_name(uint8_t weekday);
+uint8_t rtc_read_hours(void);
+uint8_t rtc_read_minutes(void);
+uint8_t rtc_read_seconds(void);
+uint8_t rtc_read_day(void);
+uint8_t rtc_read_month(void);
+uint8_t rtc_read_year(void);
 
 #endif // RTC_H

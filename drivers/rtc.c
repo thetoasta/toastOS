@@ -214,3 +214,28 @@ void rtc_print_datetime(void) {
     kprint(" ");
     kprint(am_pm);
 }
+
+// Quick read functions for clock display
+uint8_t rtc_read_hours(void) {
+    return bcd_to_binary(rtc_read_register(RTC_HOURS));
+}
+
+uint8_t rtc_read_minutes(void) {
+    return bcd_to_binary(rtc_read_register(RTC_MINUTES));
+}
+
+uint8_t rtc_read_seconds(void) {
+    return bcd_to_binary(rtc_read_register(RTC_SECONDS));
+}
+
+uint8_t rtc_read_day(void) {
+    return bcd_to_binary(rtc_read_register(RTC_DAY));
+}
+
+uint8_t rtc_read_month(void) {
+    return bcd_to_binary(rtc_read_register(RTC_MONTH));
+}
+
+uint8_t rtc_read_year(void) {
+    return bcd_to_binary(rtc_read_register(RTC_YEAR));
+}

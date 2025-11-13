@@ -12,6 +12,7 @@
 #include "string.h"
 #include "rtc.h"
 #include "registry.h"
+#include "editor.h"
 
 #define MAX_SERVICES 32
 #define MAX_SERVICE_NAME 16
@@ -34,6 +35,27 @@ static int secure_lock_enabled = 0;
 // Forward declarations
 static inline void list_services();
 
+// Input validation for security
+static inline int is_safe_string(const char* str, int max_len) {
+    if (!str) return 0;
+    
+    int len = 0;
+    while (str[len] != '\0' && len < max_len) {
+        // Check for control characters (except newline, tab, backspace)
+        if (str[len] < 32 && str[len] != '\n' && str[len] != '\t' && str[len] != '\b') {
+            return 0;
+        }
+        len++;
+    }
+    
+    // Check if string is properly null-terminated
+    if (len >= max_len && str[len] != '\0') {
+        return 0;
+    }
+    
+    return 1;
+}
+
 // Service handlers
 static inline void service_fta(const char* host) {
     fs_test_auto();
@@ -49,10 +71,30 @@ static inline void service_shutdown(const char* host) {
 
 // Filesystem services
 static inline void service_fs_write(const char* host) {
+    serial_write_string("[FS] File write requested\n");
     kprint("Enter filename: ");
     char* filename = rec_input();
+    
+    if (!is_safe_string(filename, 64)) {
+        serial_write_string("[FS] SECURITY: Invalid filename\n");
+        toast_shell_color("ERROR: Invalid filename (contains illegal characters)", LIGHT_RED);
+        kprint_newline();
+        return;
+    }
+    
     kprint("Enter content: ");
     char* content = rec_input();
+    
+    if (!is_safe_string(content, 1024)) {
+        serial_write_string("[FS] SECURITY: Invalid content\n");
+        toast_shell_color("ERROR: Invalid content (contains illegal characters)", LIGHT_RED);
+        kprint_newline();
+        return;
+    }
+    
+    serial_write_string("[FS] Writing file: ");
+    serial_write_string(filename);
+    serial_write_string("\n");
     local_fs(filename, content);
 }
 
@@ -197,7 +239,7 @@ static inline void service_disable(const char* host) {
     
     for (int i = 0; i < service_count; i++) {
         if (strcmp(services[i].name, name) == 0) {
-            if (strcmp(name, "help") == 0 || strcmp(name, "svc-enable") == 0) {
+            if (strcmp(name, "help") == 0 || strcmp(name, "svc-enable") == 0 || strcmp(name, "svc-list") == 0) {
                 kprint("Service is protected by CORE_SERVICE and cannot be disabled.");
                 kprint_newline();
                 return;
@@ -272,12 +314,22 @@ static inline void service_secure_lock(const char* host) {
 
 // Registry services
 static inline void service_registry_list(const char* host) {
+    serial_write_string("[REGISTRY] List requested\n");
     registry_list();
 }
 
 static inline void service_registry_get(const char* host) {
+    serial_write_string("[REGISTRY] Get requested\n");
     kprint("Enter key name: ");
     char* key = rec_input();
+    
+    if (!is_safe_string(key, 64)) {
+        serial_write_string("[REGISTRY] SECURITY: Invalid key name\n");
+        toast_shell_color("ERROR: Invalid key name", LIGHT_RED);
+        kprint_newline();
+        return;
+    }
+    
     const char* value = registry_get(key);
     
     if (value) {
@@ -291,12 +343,31 @@ static inline void service_registry_get(const char* host) {
 }
 
 static inline void service_registry_set(const char* host) {
+    serial_write_string("[REGISTRY] Set requested\n");
     kprint("Enter key name: ");
     char* key = rec_input();
+    
+    if (!is_safe_string(key, 64)) {
+        serial_write_string("[REGISTRY] SECURITY: Invalid key name\n");
+        toast_shell_color("ERROR: Invalid key name", LIGHT_RED);
+        kprint_newline();
+        return;
+    }
+    
     kprint("Enter value: ");
     char* value = rec_input();
     
+    if (!is_safe_string(value, 128)) {
+        serial_write_string("[REGISTRY] SECURITY: Invalid value\n");
+        toast_shell_color("ERROR: Invalid value", LIGHT_RED);
+        kprint_newline();
+        return;
+    }
+    
     if (registry_set(key, value) == 0) {
+        serial_write_string("[REGISTRY] Key set: ");
+        serial_write_string(key);
+        serial_write_string("\n");
         kprint("Registry key set successfully.");
         kprint_newline();
     } else {
@@ -306,10 +377,21 @@ static inline void service_registry_set(const char* host) {
 }
 
 static inline void service_registry_delete(const char* host) {
+    serial_write_string("[REGISTRY] Delete requested\n");
     kprint("Enter key name to delete: ");
     char* key = rec_input();
     
+    if (!is_safe_string(key, 64)) {
+        serial_write_string("[REGISTRY] SECURITY: Invalid key name\n");
+        toast_shell_color("ERROR: Invalid key name", LIGHT_RED);
+        kprint_newline();
+        return;
+    }
+    
     if (registry_delete(key) == 0) {
+        serial_write_string("[REGISTRY] Key deleted: ");
+        serial_write_string(key);
+        serial_write_string("\n");
         kprint("Registry key deleted.");
         kprint_newline();
     } else {
@@ -320,6 +402,17 @@ static inline void service_registry_delete(const char* host) {
 
 static inline void service_registry_save(const char* host) {
     registry_save();
+}
+
+// Editor services
+static inline void service_editor_new(const char* host) {
+    editor_new();
+}
+
+static inline void service_editor_open(const char* host) {
+    kprint("Enter filename to open: ");
+    char* filename = rec_input();
+    editor_open(filename);
 }
 
 // Register a service
@@ -338,13 +431,42 @@ static inline int register_service(const char* name, service_handler_t handler, 
     return 0;
 }
 
+// Call a service by name
+static inline void callservice(const char* service_name, const char* host);
+
+// Manually call a service from the shell
+static inline void service_call(const char* host) {
+    kprint("Enter service name to call: ");
+    char* service_name = rec_input();
+    
+    kprint("Enter host name (or press enter for 'shell'): ");
+    char* manual_host = rec_input();
+    
+    if (strcmp(manual_host, "") == 0) {
+        manual_host = "shell";
+    }
+    
+    if (strcmp(manual_host, "Toast Secure Service") == 0) {
+        kprint("ERROR: Cannot impersonate 'Toast Secure Service'.");
+        kprint_newline();
+        return;
+    }
+    
+    callservice(service_name, manual_host);
+}
+
 // Initialize all services
 static inline void init_services() {
+    serial_write_string("\n========================================\n");
+    serial_write_string("[INIT] Initializing service system...\n");
+    serial_write_string("========================================\n");
+    
     // Core system services
     register_service("shutdown", service_shutdown, 1);
     register_service("reboot", service_reboot, 1);
     register_service("clear", service_clear, 0);
     register_service("help", service_help, 0);
+    register_service("call", service_call, 1); // New service to call other services
     
     // Filesystem services
     register_service("fta", service_fta, 0);
@@ -383,6 +505,15 @@ static inline void init_services() {
     register_service("registry-delete", service_registry_delete, 1);
     register_service("registry-save", service_registry_save, 1);
     
+    // Editor services
+    register_service("edit", service_editor_new, 0);
+    register_service("edit-open", service_editor_open, 0);
+    
+    serial_write_string("[INIT] Service registration complete: ");
+    kprint_int(service_count);
+    serial_write_string(" services\n");
+    serial_write_string("========================================\n\n");
+    
     kprint("[SERVICES] Registered ");
     kprint_int(service_count);
     kprint(" services");
@@ -391,10 +522,17 @@ static inline void init_services() {
 
 // Call a service by name
 static inline void callservice(const char* service_name, const char* host) {
+    serial_write_string("[SERVICE] Attempting to call service: ");
+    serial_write_string(service_name);
+    serial_write_string(" (host: ");
+    serial_write_string(host);
+    serial_write_string(")\n");
+    
     kprint_newline();
     
     // Check if secure lock is enabled
     if (secure_lock_enabled) {
+        serial_write_string("[SERVICE] BLOCKED: Secure lock is enabled\n");
         kprint("ERROR: System is in SECURE LOCK mode.");
         kprint_newline();
         kprint("All services are permanently blocked. Restart required.");
@@ -404,7 +542,12 @@ static inline void callservice(const char* service_name, const char* host) {
     
     for (int i = 0; i < service_count; i++) {
         if (strcmp(services[i].name, service_name) == 0) {
+            serial_write_string("[SERVICE] Service found at index ");
+            kprint_int(i);
+            serial_write_string("\n");
+            
             if (!services[i].active) {
+                serial_write_string("[SERVICE] BLOCKED: Service is disabled\n");
                 kprint("ERROR: Service '");
                 kprint(service_name);
                 kprint("' is disabled.");
@@ -414,27 +557,47 @@ static inline void callservice(const char* service_name, const char* host) {
             
             // Check if authentication is required
             if (services[i].requires_auth) {
-                kprint("The host, '");
-                kprint(host);
-                kprint("' requested to use service '");
-                kprint(service_name);
-                kprint("'.");
-                kprint_newline();
-                kprint("Type 'y' to authorize: ");
-                char* auth = rec_input();
-                if (strcmp(auth, "y") != 0) {
-                    kprint("Authorization denied.");
+                serial_write_string("[SERVICE] Service requires authentication\n");
+                
+                // Simplified and corrected authentication logic
+                if (strcmp(host, "Toast Secure Service") != 0) {
+                    serial_write_string("[SERVICE] Requesting authorization from user\n");
+                    toast_shell_color("Authorization required for '", YELLOW);
+                    toast_shell_color(service_name, YELLOW);
+                    toast_shell_color("'.", YELLOW);
                     kprint_newline();
-                    return;
+                    kprint("This action was requested by '");
+                    kprint(host);
+                    kprint("'.");
+                    kprint_newline();
+                    kprint("Type 'y' to authorize: ");
+                    
+                    char* auth = rec_input();
+                    if (strcmp(auth, "y") != 0) {
+                        serial_write_string("[SERVICE] Authorization DENIED by user\n");
+                        toast_shell_color("Authorization denied.", LIGHT_RED);
+                        kprint_newline();
+                        return;
+                    }
+                    serial_write_string("[SERVICE] Authorization GRANTED by user\n");
+                } else {
+                    serial_write_string("[SERVICE] Auto-authorized (Toast Secure Service)\n");
                 }
+            } else {
+                serial_write_string("[SERVICE] No authentication required\n");
             }
             
+            serial_write_string("[SERVICE] Executing service handler...\n");
             services[i].handler(host);
+            serial_write_string("[SERVICE] Service execution completed\n");
             return;
         }
     }
     
     // Service not found
+    serial_write_string("[SERVICE] ERROR: Service not found: ");
+    serial_write_string(service_name);
+    serial_write_string("\n");
     kprint("INTERNAL ERROR: Service '");
     kprint(service_name);
     kprint("' not found.");
@@ -445,83 +608,71 @@ static inline void callservice(const char* service_name, const char* host) {
 
 // List all available services
 static inline void list_services() {
-    kprint("=== toastOS v1.1 - Available Commands ===");
+    kprint_newline();
+    toast_shell_color("toastOS v1.1 - Command List", LIGHT_GREEN);
     kprint_newline();
     kprint_newline();
     
-    kprint("SYSTEM:");
+    toast_shell_color("APPS:", LIGHT_CYAN);
     kprint_newline();
-    kprint("  help       - Show this help");
+    kprint("  apps          List all apps");
     kprint_newline();
-    kprint("  clear      - Clear screen");
+    kprint("  run <name>    Run an app (e.g., run calc)");
     kprint_newline();
-    kprint("  shutdown   - Power off (requires auth)");
+    kprint("  makeapp       Create apps inside toastOS");
     kprint_newline();
-    kprint("  reboot     - Restart system (requires auth)");
+    kprint("  myapps        List your custom apps");
     kprint_newline();
-    kprint_newline();
-    
-    kprint("FILESYSTEM:");
-    kprint_newline();
-    kprint("  fs-list    - List all files");
-    kprint_newline();
-    kprint("  write      - Create/write a file");
-    kprint_newline();
-    kprint("  read       - Read a file");
-    kprint_newline();
-    kprint("  fs-autotest - Run filesystem test");
+    kprint("  runapp <id>   Run custom app by ID");
     kprint_newline();
     kprint_newline();
     
-    kprint("DEBUG:");
+    toast_shell_color("FILES:", LIGHT_CYAN);
     kprint_newline();
-    kprint("  panic      - Trigger panic test");
+    kprint("  list          List all files");
     kprint_newline();
-    kprint("  db0f       - Trigger divide-by-zero exception");
+    kprint("  edit          Create/edit text file");
     kprint_newline();
-    kprint("  bomb       - Trigger security lockdown");
+    kprint("  write         Write file quickly");
     kprint_newline();
-    kprint_newline();
-    
-    kprint("TIME/DATE:");
-    kprint_newline();
-    kprint("  time       - Show current time");
-    kprint_newline();
-    kprint("  date       - Show current date");
-    kprint_newline();
-    kprint("  datetime   - Show date and time");
-    kprint_newline();
-    kprint("  timezone   - Set timezone offset");
+    kprint("  read          Read file from disk");
     kprint_newline();
     kprint_newline();
     
-    kprint("SERVICES:");
+    toast_shell_color("SYSTEM:", LIGHT_CYAN);
     kprint_newline();
-    kprint("  svc-list    - List all services");
+    kprint("  time          Show current time");
     kprint_newline();
-    kprint("  svc-disable - Disable a service (requires auth)");
+    kprint("  date          Show current date");
     kprint_newline();
-    kprint("  svc-enable  - Enable a service (requires auth)");
+    kprint("  clear         Clear screen");
     kprint_newline();
-    kprint("  securelock  - PERMANENTLY lock ALL services (requires auth)");
-    kprint_newline();
-    kprint_newline();
-    
-    kprint("REGISTRY:");
-    kprint_newline();
-    kprint("  reg-list    - View all registry entries");
-    kprint_newline();
-    kprint("  reg-get     - Get a registry value");
-    kprint_newline();
-    kprint("  reg-set     - Set a registry value (requires auth)");
-    kprint_newline();
-    kprint("  reg-delete  - Delete a registry entry (requires auth)");
-    kprint_newline();
-    kprint("  reg-save    - Save registry to disk (requires auth)");
+    kprint("  shutdown      Power off");
     kprint_newline();
     kprint_newline();
     
-    kprint("Type any command and press ENTER");
+    toast_shell_color("NETWORK:", LIGHT_CYAN);
+    kprint_newline();
+    kprint("  ifconfig      Show network interface");
+    kprint_newline();
+    kprint("  setip <ip> <netmask> <gateway>");
+    kprint_newline();
+    kprint("                Configure IP address");
+    kprint_newline();
+    kprint("  ping <ip>     Send ICMP echo to IP");
+    kprint_newline();
+    kprint("  netstat       Show network stats");
+    kprint_newline();
+    kprint_newline();
+    
+    toast_shell_color("EDITOR (inside edit):", YELLOW);
+    kprint_newline();
+    kprint("  :w      Save file");
+    kprint_newline();
+    kprint("  :q      Quit");
+    kprint_newline();
+    kprint("  :wq     Save and quit");
+    kprint_newline();
     kprint_newline();
 }
 
