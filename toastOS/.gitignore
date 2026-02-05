@@ -1,0 +1,11 @@
+*.o
+# i don't want to send any build files, each release will have the full iso or kernel file....
+
+*.ko
+*.fleet/
+# darn fleet files i like fleet but no GDBBBBBB
+
+kernel
+
+.vscode/
+# AND VSCODE OMG
