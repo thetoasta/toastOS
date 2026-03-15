@@ -248,8 +248,10 @@ isr19:
 		
 		; Clean up stack (kmain doesn't return)
 		add esp, 8
-		
+
+	.halt_loop:
 		hlt 				;halt the CPU
+		jmp .halt_loop		;loop back in case of spurious wakeup
 
 	section .bss
 	resb 8192; 8KB for stack

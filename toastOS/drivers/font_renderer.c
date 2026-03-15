@@ -80,3 +80,20 @@ void toast_ft_cleanup(void) {
     if (ft_lib)   { FT_Done_FreeType(ft_lib);     ft_lib  = NULL; }
     ft_ready = 0;
 }
+
+int toast_ft_render_glyph(char c, toast_glyph_t *out) {
+    if (!ft_face || !out) return -1;
+
+    FT_Error err = FT_Load_Char(ft_face, (FT_ULong)c, FT_LOAD_RENDER);
+    if (err) return -1;
+
+    FT_GlyphSlot g = ft_face->glyph;
+    out->buffer    = g->bitmap.buffer;
+    out->width     = (int)g->bitmap.width;
+    out->height    = (int)g->bitmap.rows;
+    out->pitch     = (int)g->bitmap.pitch;
+    out->bearing_x = (int)g->bitmap_left;
+    out->bearing_y = (int)g->bitmap_top;
+    out->advance   = (int)(g->advance.x >> 6); /* 26.6 → pixels */
+    return 0;
+}

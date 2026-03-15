@@ -14,8 +14,11 @@ static uint32_t data_start_lba;
 static uint32_t root_dir_sectors;
 static int fat16_initialized = 0;
 
-/* Sector buffer */
-static uint8_t sector_buffer[512];
+/* Sector buffers — separate buffers prevent FAT and dir operations
+   from clobbering each other when they share function calls. */
+static uint8_t sector_buffer[512];     /* general / data I/O  */
+static uint8_t fat_buffer[512];        /* FAT read/write only */
+static uint8_t dir_buffer[512];        /* directory operations */
 
 /* Convert filename to FAT16 8.3 format */
 static void to_fat16_name(const char* filename, uint8_t* fat_name) {
@@ -64,36 +67,36 @@ static uint32_t cluster_to_lba(uint16_t cluster) {
     return data_start_lba + (cluster - 2) * bpb.sectors_per_cluster;
 }
 
-/* Read FAT entry for a cluster */
+/* Read FAT entry for a cluster (uses fat_buffer) */
 static uint16_t fat16_read_fat(uint16_t cluster) {
     uint32_t fat_offset = cluster * 2;
     uint32_t fat_sector = fat_start_lba + (fat_offset / 512);
     uint32_t entry_offset = fat_offset % 512;
     
-    if (ata_read_sectors(fat_sector, 1, sector_buffer) < 0) {
+    if (ata_read_sectors(fat_sector, 1, fat_buffer) < 0) {
         return FAT16_BAD_CLUSTER;
     }
     
-    return *(uint16_t*)(&sector_buffer[entry_offset]);
+    return *(uint16_t*)(&fat_buffer[entry_offset]);
 }
 
-/* Write FAT entry */
+/* Write FAT entry (uses fat_buffer) */
 static int fat16_write_fat(uint16_t cluster, uint16_t value) {
     uint32_t fat_offset = cluster * 2;
     uint32_t fat_sector = fat_start_lba + (fat_offset / 512);
     uint32_t entry_offset = fat_offset % 512;
     
     /* Read sector */
-    if (ata_read_sectors(fat_sector, 1, sector_buffer) < 0) return -1;
+    if (ata_read_sectors(fat_sector, 1, fat_buffer) < 0) return -1;
     
     /* Modify entry */
-    *(uint16_t*)(&sector_buffer[entry_offset]) = value;
+    *(uint16_t*)(&fat_buffer[entry_offset]) = value;
     
     /* Write back to both FATs */
-    if (ata_write_sectors(fat_sector, 1, sector_buffer) < 0) return -1;
+    if (ata_write_sectors(fat_sector, 1, fat_buffer) < 0) return -1;
     if (bpb.fat_count > 1) {
         uint32_t fat2_sector = fat_sector + bpb.sectors_per_fat;
-        if (ata_write_sectors(fat2_sector, 1, sector_buffer) < 0) return -1;
+        if (ata_write_sectors(fat2_sector, 1, fat_buffer) < 0) return -1;
     }
     
     return 0;
@@ -387,15 +390,15 @@ int fat16_read_file(const char* filename, char* buffer, uint32_t max_size) {
     return -1;  /* File not found */
 }
 
-/* Delete a file */
+/* Delete a file (uses dir_buffer so FAT ops don't clobber the dir sector) */
 int fat16_delete_file(const char* filename) {
     if (!fat16_initialized) return -1;
     
     /* Search root directory */
     for (uint32_t s = 0; s < root_dir_sectors; s++) {
-        if (ata_read_sectors(root_dir_start_lba + s, 1, sector_buffer) < 0) return -1;
+        if (ata_read_sectors(root_dir_start_lba + s, 1, dir_buffer) < 0) return -1;
         
-        fat16_dir_entry_t* entries = (fat16_dir_entry_t*)sector_buffer;
+        fat16_dir_entry_t* entries = (fat16_dir_entry_t*)dir_buffer;
         for (int e = 0; e < 16; e++) {
             if (entries[e].filename[0] == 0x00) break;
             if (entries[e].filename[0] == 0xE5) continue;
@@ -403,16 +406,16 @@ int fat16_delete_file(const char* filename) {
             if (fat16_name_match(entries[e].filename, filename)) {
                 uint16_t cluster = entries[e].first_cluster;
                 
-                /* Free cluster chain */
+                /* Free cluster chain (uses fat_buffer internally) */
                 while (cluster >= 2 && cluster < FAT16_END_OF_CHAIN) {
                     uint16_t next = fat16_read_fat(cluster);
                     fat16_write_fat(cluster, FAT16_FREE_CLUSTER);
                     cluster = next;
                 }
                 
-                /* Mark directory entry as deleted */
+                /* Mark directory entry as deleted — dir_buffer is still intact */
                 entries[e].filename[0] = 0xE5;
-                if (ata_write_sectors(root_dir_start_lba + s, 1, sector_buffer) < 0) return -1;
+                if (ata_write_sectors(root_dir_start_lba + s, 1, dir_buffer) < 0) return -1;
                 
                 kprint("[FAT16] Deleted: ");
                 kprint(filename);

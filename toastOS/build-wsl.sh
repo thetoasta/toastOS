@@ -2,8 +2,7 @@
 set -e
 
 # =====================
-# toastOS build script
-# WSL compatible
+# toastEngine Build System for toastOS
 # =====================
 
 export PATH=/usr/local/cross/bin:$PATH
@@ -18,7 +17,7 @@ CFLAGS="-m32 -ffreestanding -fno-stack-protector -fno-pic -I drivers"
 FTCFLAGS="$CFLAGS -I freetype/include -DFT2_BUILD_LIBRARY -DFT_CONFIG_OPTION_NO_ASSEMBLER"
 LDFLAGS="-m elf_i386 -T link.ld"
 
-OBJS="kasm.o setjmp.o kernel.o toast_libc.o kio.o panic.o file.o stdio.o ata.o fat16.o bootloader.o time.o font_renderer.o"
+OBJS="setup.o kasm.o toast_mgr.o tapplayer.o setjmp.o kernel.o toast_libc.o kio.o panic.o file.o stdio.o ata.o fat16.o bootloader.o time.o font_renderer.o obama.o registry.o exec.o editor.o tscript.o"
 FT_OBJS="ftsystem.o ftinit.o ftbase.o ftbitmap.o ftglyph.o ftdebug.o ftmm.o raster.o smooth.o truetype.o sfnt.o psnames.o"
 
 # ---- WSL detection (optional, but nice)
@@ -50,9 +49,16 @@ $CC $CFLAGS -c drivers/file.c -o file.o
 $CC $CFLAGS -c drivers/stdio.c -o stdio.o
 $CC $CFLAGS -c drivers/ata.c -o ata.o
 $CC $CFLAGS -c drivers/fat16.c -o fat16.o
+$CC $CFLAGS -c services/tapplayer.c -o tapplayer.o
+$CC $CFLAGS -c services/setup.c -o setup.o
+$CC $CFLAGS -c apps/obama.c -o obama.o
+$CC $CFLAGS -c apps/toast_mgr.c -o toast_mgr.o
 $CC $CFLAGS -c drivers/bootloader.c -o bootloader.o
 $CC $CFLAGS -c drivers/time.c -o time.o
-
+$CC $CFLAGS -c drivers/registry.c -o registry.o
+$CC $CFLAGS -c drivers/exec.c -o exec.o
+$CC $CFLAGS -c drivers/editor.c -o editor.o
+$CC $CFLAGS -c drivers/tscript.c -o tscript.o
 echo "[*] Compiling FreeType font renderer..."
 $CC $FTCFLAGS -c drivers/font_renderer.c -o font_renderer.o
 
@@ -87,7 +93,7 @@ echo "[+] toastOS VM Prep finished... can run in VM"
 echo "[*] Launching toastOS in QEMU..."
 qemu-system-i386.exe \
   -kernel kernel \
-  -m 20M \
+  -m 8M \
   -serial stdio \
   -hda toastos.img \
   -no-reboot

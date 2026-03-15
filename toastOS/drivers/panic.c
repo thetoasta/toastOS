@@ -3,6 +3,7 @@
 #include "kio.h"
 #include "funcs.h"
 
+
 int crashlevel = 0;
 
 void l3_panic(const char *message) {
@@ -104,26 +105,26 @@ typedef struct {
 
 /* Exception messages */
 static const char *exception_messages[] = {
-    "crash! TCode: IMPOSSIBLE_OPERATION", // Divide by 0
-    "crash! TCode: DEBUG", // Debug
-    "crash! TCode: NON_MASKABLE_INTER", // Non maskable interrupt
-    "crash! TCode: BREAK /// Notice: This is a development error.", // Breakpoint
-    "crash! TCode: IN_OVERFLOW", // Just In Overflow
-    "crash! TCode: ILLEGAL_SPOT", // Illegal spot
-    "crash! TCode: INVALID_OPCODE", // Invailid Opcode
-    "crash! TCode: MISSING_COPROCESSOR", // No coprocessor
-    "crash! TCode: DOUBLE_FAULT", // pretty easy
-    "crash! TCode: COPROCESSOR_OVERRUN", // Coprocessor Segment OVerrun
-    "crash! TCode: BAD_TSS", // bad tss
-    "crash! TCode: SEG_NOT_PRESENT", // segment not presentt
-    "crash! TCode: STACK_FAULT", //stack fault
-    "crash! TCode: GENERAL_PROT_FAULT", // general prot fault
-    "crash! TCode: PAGE_FAULT",
-    "crash! TCode: UNKNOWN_INTER",
-    "crash! TCode: COPROCESSOR_FAULT",
-    "crash! TCode: ALIGN_CHECK",
-    "crash! TCode: LOCAL_CHECK", // MACHIONE CHECK
-    "crash! TCode: SIMD_FLOATING_POINT_EXCEPTION" // SIMG FLOATING POINT EXCEPT
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  IMPOSSIBLE_OPERATION", // Divide by 0
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  DEBUG", // Debug
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  NON_MASKABLE_INTER", // Non maskable interrupt
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  BREAK /// Notice: This is a development error.", // Breakpoint
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  IN_OVERFLOW", // Just In Overflow
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  ILLEGAL_SPOT", // Illegal spot
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  INVALID_OPCODE", // Invailid Opcode
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  MISSING_COPROCESSOR", // No coprocessor
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  DOUBLE_FAULT", // pretty easy
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  COPROCESSOR_OVERRUN", // Coprocessor Segment OVerrun
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  BAD_TSS", // bad tss
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  SEG_NOT_PRESENT", // segment not presentt
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  STACK_FAULT", //stack fault
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  GENERAL_PROT_FAULT", // general prot fault
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  PAGE_FAULT",
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  UNKNOWN_INTER",
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  COPROCESSOR_FAULT",
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  ALIGN_CHECK",
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  LOCAL_CHECK", // MACHIONE CHECK
+    "toastOS sadly experienced a issue during runtime. Here's what went wrong:  SIMD_FLOATING_POINT_EXCEPTION" // SIMG FLOATING POINT EXCEPT
 };
 
 void set_idt_gate(int n, unsigned int handler) {

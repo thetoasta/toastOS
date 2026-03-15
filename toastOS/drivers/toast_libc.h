@@ -3,9 +3,9 @@
  * Copyright (C) 2025 thetoasta
  * This file is licensed under the Mozilla Public License, v. 2.0.
  */
-
 #ifndef TOAST_LIBC_H
 #define TOAST_LIBC_H
+
 
 /* ---- stddef.h ---- */
 #ifndef _STDDEF_H

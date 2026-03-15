@@ -1,12 +1,42 @@
 #include "time.h"
+#include "registry.h"
 #include "kio.h"
 #include "stdint.h"
 
 #define ALL_MEMORY 0x100000 // Placeholder for now
+#define PIT_FREQ 1193180
+#define TARGET_HZ 18  // ~18 Hz = roughly every 55ms
 
 extern char read_port(unsigned short port);
 extern void write_port(unsigned short port, unsigned char data);
 extern unsigned int total_memory_kb;
+extern volatile int registry_saving;
+
+static int timezone_offset = 0;  // Hours offset from UTC
+static int use_24hr = 1;         // 1 = 24hr, 0 = 12hr
+
+void set_timezone(int offset_hours) {
+    timezone_offset = offset_hours;
+}
+
+int get_timezone(void) {
+    return timezone_offset;
+}
+
+void set_time_format(int is_24hr) {
+    use_24hr = is_24hr;
+}
+
+int get_time_format(void) {
+    return use_24hr;
+}
+
+void init_timer() {
+    uint16_t divisor = PIT_FREQ / TARGET_HZ;
+    write_port(0x43, 0x36);              // Channel 0, lo/hi byte, square wave
+    write_port(0x40, divisor & 0xFF);    // Low byte
+    write_port(0x40, (divisor >> 8) & 0xFF); // High byte
+}
 
 static int bcd2bin(int num) { // Convert BCD to Binary
     return ((num >> 4) * 10) + (num & 0x0F);
@@ -83,12 +113,16 @@ void write_time_string(int x, int y, uint8_t val) {
 
 static uint32_t ticks = 0;
 
+uint32_t get_uptime_seconds(void) {
+    return ticks / 18;
+}
+
 void timer_handler() {
     ticks++;
     if (ticks % 18 == 0) { // Roughly every second (18.2 Hz is standard ticker)
         update_top_bar();
     }
-    
+    // Don't auto-save registry from timer - only on explicit reg_save() calls
     // Send EOI to PIC (Master only since IRQ0)
     write_port(0x20, 0x20); 
 }
@@ -116,8 +150,16 @@ void update_top_bar() {
         write_char_at(i, 0, ' ', ((BLUE << 4) | WHITE));
     }
 
-    // Left: toastOS Version
+    // Left: toastOS Version and Terminal number
     write_string_at(1, 0, "toastOS v1.1", ((BLUE << 4) | WHITE));
+    write_string_at(14, 0, "[", ((BLUE << 4) | WHITE));
+    write_num_at(15, 0, get_current_terminal() + 1, ((BLUE << 4) | YELLOW));
+    write_string_at(16, 0, "]", ((BLUE << 4) | WHITE));
+
+    /* Show saving indicator when registry is being persisted */
+    if (reg_is_saving()) {
+        write_string_at(18, 0, "*", ((BLUE << 4) | YELLOW));
+    }
 
     // Center: Memory Usage (Total Memory)
     if (total_memory_kb > 0) {
@@ -128,11 +170,24 @@ void update_top_bar() {
         write_string_at(30, 0, "Mem: Unknown", ((BLUE << 4) | WHITE));
     }
 
-    // Right: Time
+    // Right: Time (with timezone offset)
     time_t t = get_time();
-    write_time_string(70, 0, t.hour);
+    int adjusted_hour = (int)t.hour + timezone_offset;
+    if (adjusted_hour < 0) adjusted_hour += 24;
+    if (adjusted_hour >= 24) adjusted_hour -= 24;
+
+    if (use_24hr) {
+        write_time_string(70, 0, (uint8_t)adjusted_hour);
+    } else {
+        int h12 = adjusted_hour % 12;
+        if (h12 == 0) h12 = 12;
+        write_time_string(70, 0, (uint8_t)h12);
+    }
     write_string_at(72, 0, ":", ((BLUE << 4) | WHITE));
     write_time_string(73, 0, t.minute);
     write_string_at(75, 0, ":", ((BLUE << 4) | WHITE));
     write_time_string(76, 0, t.second);
+    if (!use_24hr) {
+        write_string_at(78, 0, adjusted_hour < 12 ? "AM" : "PM", ((BLUE << 4) | WHITE));
+    }
 }

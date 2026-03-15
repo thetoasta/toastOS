@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="CMakeProjectFlavorService">
+    <option name="flavorId" value="CMakePlainProjectFlavor" />
+  </component>
+  <component name="CMakeSettings">
+    <configurations>
+      <configuration PROFILE_NAME="Debug" ENABLED="true" CONFIG_NAME="Debug" />
+    </configurations>
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="a67f6585-1e6e-4c9c-abc1-e0c16220116a" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/toastOS/build-wsl.sh" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/build-wsl.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/font_renderer.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/font_renderer.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/font_renderer.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/font_renderer.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/kio.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/kio.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/kio.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/kio.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/time.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/time.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/time.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/time.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/toast_libc.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/toast_libc.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/freetype" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftmodule.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftmodule.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftoption.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftoption.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftstdlib.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftstdlib.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/freetype/src/base/ftbase.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/src/base/ftbase.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/kernel.bin" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/kernel.bin" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/kernel.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/kernel.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/toastos.img" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/toastos.img" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/toastos.iso" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/toastos.iso" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_C:/Users/toastman/Documents/toastOS" value="39Leo4mXXFTWtyPoScU1YyAe4eu" />
+    </persistenceIdMap>
+  </component>
+  <component name="EmbeddingIndexingInfo">
+    <option name="cachedIndexableFilesCount" value="815" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MacroExpansionManager">
+    <option name="directoryName" value="P49qgzBi" />
+  </component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 0
+}]]></component>
+  <component name="ProjectId" id="39Leo4mXXFTWtyPoScU1YyAe4eu" />
+  <component name="ProjectStatusUIService"><![CDATA[{
+  "uiKindId": "Widget"
+}]]></component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.RadMigrateCodeStyle": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.readMode.enableVisualFormatting": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "main",
+    "junie.onboarding.icon.badge.shown": "true",
+    "last_opened_file_path": "C:/Users/toastman/Documents/toastOS",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "org.rust.first.attach.projects": "true",
+    "to.speed.mode.migration.done": "true",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RecapSpentCounter">
+    <option name="endsOfQuotaMs" value="1772578806382" />
+    <option name="spentUsd" value="0.004862" />
+  </component>
+  <component name="RecapUselessUpdatesCounter">
+    <option name="suspendCountdown" value="9" />
+  </component>
+  <component name="RunManager">
+    <configuration name="Unnamed" type="ShConfigurationType" nameIsGenerated="true">
+      <option name="SCRIPT_TEXT" value="" />
+      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+      <option name="SCRIPT_PATH" value="" />
+      <option name="SCRIPT_OPTIONS" value="" />
+      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$/toastOS" />
+      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
+      <option name="INTERPRETER_PATH" value="powershell.exe" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="EXECUTE_IN_TERMINAL" value="true" />
+      <option name="EXECUTE_SCRIPT_FILE" value="true" />
+      <envs />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="RustProjectSettings">
+    <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="a67f6585-1e6e-4c9c-abc1-e0c16220116a" name="Changes" comment="" />
+      <created>1770479951883</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1770479951883</updated>
+      <workItem from="1770479953120" duration="1015000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/toastOS/drivers/kio.c</url>
+          <option name="timeStamp" value="3" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+  <component name="github-copilot-workspace">
+    <instructionFileLocations>
+      <option value=".github/instructions" />
+    </instructionFileLocations>
+    <promptFileLocations>
+      <option value=".github/prompts" />
+    </promptFileLocations>
+  </component>
+</project>

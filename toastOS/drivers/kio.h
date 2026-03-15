@@ -66,6 +66,7 @@ void kprint_newline(void);
 void clear_screen(void);
 void clear_screen_color(uint8_t bg_color);
 void keyboard_handler_main(void);
+void update_cursor(int x, int y);
 void init_shell();
 void panic_init();
 void toast_shell_color(const char* str, uint8_t color);
@@ -75,6 +76,7 @@ void reboot(void);
 void disk_operations_terminal(void);
 void toastos_install(void);
 void print_num(uint32_t n);
+int get_current_terminal(void);
 
 
 #endif /* KERNEL_KEYBOARD_H */

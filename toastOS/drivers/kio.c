@@ -1,11 +1,42 @@
 #include "kio.h"
 #include "funcs.h"
 #include "panic.h"
-#include "stdint.h"
 #include "file.h"
 #include "fat16.h"
 #include "ata.h"
 #include "bootloader.h"
+#include "time.h"
+#include "toast_libc.h"
+#include "../services/tapplayer.h"
+#include "registry.h"
+#include "exec.h"
+#include "editor.h"
+#include "tscript.h"
+
+/*
+
+toastOS brain. links everything together, thinks and then somehow works. 
+
+v1.7
+
+*/
+
+/* ===== APP DECLARATIONS ===== */
+extern void obama_main(int app_id);
+extern void toast_mgr_main(int app_id);
+
+/* ===== APP REGISTRY ===== */
+typedef struct {
+    char* name;
+    void (*entry)(int app_id);
+    int permissions;
+} AppEntry;
+
+static AppEntry app_list[] = {
+    {"obama", obama_main, PERM_ALL},
+    {"manager", toast_mgr_main, PERM_PRINT | PERM_PANIC},
+};
+static int app_count = sizeof(app_list) / sizeof(AppEntry);
 
 #define LINES 25
 #define COLUMNS_IN_LINE 80
@@ -19,21 +50,92 @@
 #define KERNEL_CODE_SEGMENT_OFFSET 0x08
 #define KEYBOARD_INPUT_LENGTH 256
 #define ENTER_KEY_CODE 0x1C
+// Base terminal count, don't change no matter what because this just lets toastOS know the terminal system.
+// If changed, terminals might not work.
+// MS Version
+#define NUM_TERMINALS 7
+// * Total allowed terminals.
+// Leave on 6. JUST LEAVE ON 6.
+static int runtime_num_terminals = 7;
+/* Service notice shown flag (runtime) */
+static int service_notice_shown = 0;
+
+/* ===== VIRTUAL TERMINAL SYSTEM ===== */
+typedef struct {
+    char screen_buffer[SCREENSIZE];
+    char input_buffer[KEYBOARD_INPUT_LENGTH];
+    unsigned int input_index;
+    unsigned int cursor_loc;
+    uint8_t bg_color;
+    uint8_t active;
+} VirtualTerminal;
+
+static VirtualTerminal terminals[NUM_TERMINALS];
+static int current_terminal = 0;
 
 char input_buffer[KEYBOARD_INPUT_LENGTH];
 unsigned int input_index = 0;
+static uint8_t shift_held = 0;
+static uint8_t alt_held   = 0;
+static uint8_t ctrl_held  = 0;
 
 unsigned int current_loc = 0;
 char *vidptr = (char*)0xb8000;
 static uint8_t screen_bg_color = BLACK;
 
+/* ===== COMMAND HISTORY ===== */
+#define HISTORY_SIZE 16
+static char history[HISTORY_SIZE][KEYBOARD_INPUT_LENGTH];
+static int history_count = 0;
+static int history_pos   = 0;  /* current browse position, -1 = live input */
+static char history_saved[KEYBOARD_INPUT_LENGTH]; /* partial input saved when browsing */
+
+static void history_push(const char *cmd) {
+    if (cmd[0] == '\0') return;
+    /* Don't store duplicate of the most recent entry */
+    if (history_count > 0 && strcmp(history[(history_count - 1) % HISTORY_SIZE], cmd) == 0) return;
+    strncpy(history[history_count % HISTORY_SIZE], cmd, KEYBOARD_INPUT_LENGTH - 1);
+    history[history_count % HISTORY_SIZE][KEYBOARD_INPUT_LENGTH - 1] = '\0';
+    history_count++;
+}
+
+/* Erase current input on screen and replace with str */
+static void replace_input_line(const char *str) {
+    /* Back up to prompt start */
+    while (input_index > 0) {
+        input_index--;
+        current_loc -= 2;
+        vidptr[current_loc] = ' ';
+        vidptr[current_loc + 1] = (uint8_t)((screen_bg_color << 4) | LIGHT_GREY);
+    }
+    /* Write new string */
+    unsigned int i = 0;
+    while (str[i] && i < KEYBOARD_INPUT_LENGTH - 1) {
+        input_buffer[i] = str[i];
+        vidptr[current_loc++] = str[i];
+        vidptr[current_loc++] = (uint8_t)((screen_bg_color << 4) | LIGHT_GREY);
+        i++;
+    }
+    input_buffer[i] = '\0';
+    input_index = i;
+    update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
+}
+
 extern unsigned char keyboard_map[128];
+extern unsigned char keyboard_map_shifted[128];
 extern void keyboard_handler(void);
 extern char read_port(unsigned short port);
 extern void write_port(unsigned short port, unsigned char data);
 extern void load_idt(unsigned long *idt_ptr);
 
 static uint8_t parse_hex_nibble(const char* s);
+static void save_current_terminal(void);
+static void restore_terminal(int term_idx);
+static void switch_terminal(int term_idx);
+
+int get_current_terminal(void) {
+    return current_terminal;
+}
 
 static inline void outw(unsigned short port, unsigned short val) {
     __asm__ volatile ("outw %0, %1" : : "a"(val), "Nd"(port));
@@ -65,6 +167,7 @@ void update_cursor(int x, int y) {
     outb(0x3D5, (uint8_t)(pos & 0xFF));
     outb(0x3D4, 0x0E);
     outb(0x3D5, (uint8_t)((pos >> 8) & 0xFF));
+    /* private toastOS Security service checking if multiswitch count changed */
 }
 
 void disable_cursor() {
@@ -110,16 +213,22 @@ void reboot() {
  * CPU exceptions and keyboard interrupts properly with assembly stubs */
 
 void kb_init(void) {
-    // Enable only IRQ1 (keyboard)
-    write_port(0x21, 0xFD);
+    // Enable IRQ0 (timer) and IRQ1 (keyboard)
+    write_port(0x21, 0xFC);
 }
 
 void kprint(const char *str) {
+    if (!str) return;
     unsigned int i = 0;
     // ensure we start below the top bar
     if (current_loc < 160) current_loc = 160;
     
     while (str[i]) {
+        if (str[i] == '\n') {
+            i++;
+            kprint_newline();
+            continue;
+        }
         vidptr[current_loc++] = str[i++];
         vidptr[current_loc++] = (uint8_t)((screen_bg_color << 4) | LIGHT_GREY);
     }
@@ -195,46 +304,181 @@ void keyboard_handler_main(void) {
         char keycode = read_port(KEYBOARD_DATA_PORT);
         static uint8_t got_e0 = 0;
 
+        // E0 extended-key prefix — must be checked BEFORE the release check
+        // because 0xE0 has bit 7 set and would otherwise be misidentified as
+        // a key-release event.
+        if ((unsigned char)keycode == 0xE0) {
+            got_e0 = 1;
+            return;
+        }
+
         // Ignore key release events (bit 7 set = key released)
-        if (keycode & 0x80) {
-            // Key release - just clear e0 flag if needed and return
+        if ((unsigned char)keycode & 0x80) {
+            unsigned char released = keycode & 0x7F;
+            if (released == 0x2A || released == 0x36) shift_held = 0;
+            if (released == 0x38)                     alt_held   = 0;
+            if (released == 0x1D)                     ctrl_held  = 0;
             got_e0 = 0;
             return;
         }
 
-        if ((uint8_t)keycode == 0xE0) {
-            got_e0 = 1;
+        // Left shift (0x2A) or Right shift (0x36) pressed
+        if ((unsigned char)keycode == 0x2A || (unsigned char)keycode == 0x36) {
+            shift_held = 1;
+            return;
+        }
+
+        // Left Alt (0x38) pressed
+        if ((unsigned char)keycode == 0x38) {
+            alt_held = 1;
+            return;
+        }
+
+        // Left Ctrl (0x1D) pressed
+        if ((unsigned char)keycode == 0x1D) {
+            ctrl_held = 1;
+            return;
+        }
+
+        // Backslash (0x2B) to exit current app
+        if ((unsigned char)keycode == 0x2B) {
+            exitapp(0);
+            kprint_newline();
+            kprint("App terminated by user.");
+            kprint_newline();
+            kprint("toastOS > ");
+            input_index = 0;
             return;
         }
 
         if (got_e0) {
             got_e0 = 0;
+
+            /* Route extended key to editor if active */
+            if (editor_is_active()) {
+                char c = shift_held ? keyboard_map_shifted[(unsigned char)keycode]
+                                    : keyboard_map[(unsigned char)keycode];
+                editor_handle_key((uint8_t)keycode, c, shift_held, ctrl_held, 1);
+                if (editor_run_requested()) {
+                    goto do_tscript_run;
+                }
+                if (!editor_is_active()) {
+                    clear_screen();
+                    kprint_newline();
+                    kprint("toastOS > ");
+                    input_index = 0;
+                }
+                return;
+            }
+
+            // Right Alt (AltGr) with E0 prefix = 0x38
+            if ((uint8_t)keycode == 0x38) {
+                alt_held = 1;
+                return;
+            }
             if ((uint8_t)keycode == 0x53) {
-                l3_panic("Delete initiated crash");
+                l1_panic("Delete initiated quick panic");
+                return;
+            }
+            /* Up arrow (0x48) — history previous */
+            if ((uint8_t)keycode == 0x48) {
+                if (history_count > 0) {
+                    if (history_pos == -1) {
+                        /* Save current partial input */
+                        strncpy(history_saved, input_buffer, KEYBOARD_INPUT_LENGTH - 1);
+                        history_saved[input_index] = '\0';
+                        history_pos = history_count - 1;
+                    } else if (history_pos > 0 && history_pos > history_count - HISTORY_SIZE) {
+                        history_pos--;
+                    }
+                    replace_input_line(history[history_pos % HISTORY_SIZE]);
+                }
+                return;
+            }
+            /* Down arrow (0x50) — history next */
+            if ((uint8_t)keycode == 0x50) {
+                if (history_pos >= 0) {
+                    history_pos++;
+                    if (history_pos >= history_count) {
+                        history_pos = -1;
+                        replace_input_line(history_saved);
+                    } else {
+                        replace_input_line(history[history_pos % HISTORY_SIZE]);
+                    }
+                }
                 return;
             }
             return; // Ignore other extended keys for now
         }
         
+        // Handle Alt + Number for terminal switching
+        if (alt_held) {
+            // Number keys: 1=0x02, 2=0x03, 3=0x04, 4=0x05, 5=0x06, 6=0x07
+                if (keycode >= 0x02 && keycode <= 0x07) {
+                int term_idx = keycode - 0x02;  // 0-5 for terminals 1-6
+                if (term_idx < runtime_num_terminals) {
+                    switch_terminal(term_idx);
+                }
+                return;
+            }
+        }
+        
+        /* Route regular key to editor if active */
+        if (editor_is_active()) {
+            char c = shift_held ? keyboard_map_shifted[(unsigned char)keycode]
+                                : keyboard_map[(unsigned char)keycode];
+            editor_handle_key((uint8_t)keycode, c, shift_held, ctrl_held, 0);
+            if (editor_run_requested()) {
+                goto do_tscript_run;
+            }
+            if (!editor_is_active()) {
+                clear_screen();
+                kprint_newline();
+                kprint("toastOS > ");
+                input_index = 0;
+            }
+            return;
+        }
+
         if (keycode == ENTER_KEY_CODE) {
             kprint_newline();
             input_buffer[input_index] = '\0';
+            history_push(input_buffer);
+            history_pos = -1;
             if (current_loc >= SCREENSIZE) {
                 clear_screen();
             }
-            
+
             /* ===== SYSTEM COMMANDS ===== */
             if (strcmp(input_buffer, "help") == 0) {
-                kprint("toastOS v1.0 - Command Reference");
+                kprint("toastOS v1.1 - Command Reference");
                 kprint_newline();
                 kprint_newline();
                 kprint("  System:    help, clear, info, shutdown, reboot");
                 kprint_newline();
-                kprint("  Display:   cursor-on, cursor-off, bg <color>");
+                kprint("  Display:   cursor-on, cursor-off, bg");
                 kprint_newline();
-                kprint("  Disk:      disk operations (opens disk terminal)");
+                kprint("  Time:      date, uptime, timezone <tz>, timeformat 12|24");
+                kprint_newline();
+                kprint("  Disk:      disk, ls, cat <file>, rm, disk write, disk rename");
+                kprint_newline();
+                kprint("  Apps:      apps, run <app>, exec <file.tapp>");
+                kprint_newline();
+                kprint("  Editor:    edit <file>");
+                kprint_newline();
+                kprint("  IDE:       toast app engine <file.tsc>");
+                kprint_newline();
+                kprint("  Registry:  reg list, reg get, reg set, reg del");
+                kprint_newline();
+                kprint("  Misc:      echo <text>, history, whoami");
+                kprint_newline();
+                kprint("  Setup:     toastsetup reset");
                 kprint_newline();
                 kprint("  Debug:     panic, mpanic, test-div0");
+                kprint_newline();
+                kprint("  Shortcuts: Alt+1 to Alt+6 switch terminals");
+                kprint_newline();
+                kprint("             Up/Down arrows browse command history");
                 kprint_newline();
             }
             else if (strcmp(input_buffer, "clear") == 0) {
@@ -251,7 +495,230 @@ void keyboard_handler_main(void) {
             else if (strcmp(input_buffer, "reboot") == 0) {
                 reboot();
             }
+
+            /* ===== NEW UTILITY COMMANDS ===== */
+            else if (strncmp(input_buffer, "echo ", 5) == 0) {
+                kprint(input_buffer + 5);
+            }
+            else if (strcmp(input_buffer, "echo") == 0) {
+                /* empty echo = blank line */
+            }
+            else if (strcmp(input_buffer, "date") == 0) {
+                time_t t = get_time();
+                int adj_h = (int)t.hour + get_timezone();
+                if (adj_h < 0) adj_h += 24;
+                if (adj_h >= 24) adj_h -= 24;
+                /* Print: YYYY-MM-DD HH:MM:SS */
+                print_num(t.year);
+                kprint("-");
+                if (t.month < 10) kprint("0");
+                print_num(t.month);
+                kprint("-");
+                if (t.day < 10) kprint("0");
+                print_num(t.day);
+                kprint(" ");
+                if (adj_h < 10) kprint("0");
+                print_num((uint32_t)adj_h);
+                kprint(":");
+                if (t.minute < 10) kprint("0");
+                print_num(t.minute);
+                kprint(":");
+                if (t.second < 10) kprint("0");
+                print_num(t.second);
+            }
+            else if (strcmp(input_buffer, "uptime") == 0) {
+                uint32_t secs = get_uptime_seconds();
+                uint32_t mins = secs / 60;
+                uint32_t hrs  = mins / 60;
+                if (hrs > 0) {
+                    print_num(hrs);
+                    kprint("h ");
+                }
+                print_num(mins % 60);
+                kprint("m ");
+                print_num(secs % 60);
+                kprint("s");
+            }
+            else if (strcmp(input_buffer, "apps") == 0) {
+                kprint("Available apps:");
+                kprint_newline();
+                for (int i = 0; i < app_count; i++) {
+                    kprint("  ");
+                    kprint(app_list[i].name);
+                    kprint_newline();
+                }
+            }
+            else if (strcmp(input_buffer, "history") == 0) {
+                int start = history_count > HISTORY_SIZE ? history_count - HISTORY_SIZE : 0;
+                for (int i = start; i < history_count; i++) {
+                    kprint("  ");
+                    kprint(history[i % HISTORY_SIZE]);
+                    kprint_newline();
+                }
+            }
+
+            /* ===== CAT <filename> (inline) ===== */
+            else if (strncmp(input_buffer, "cat ", 4) == 0) {
+                char* fname = input_buffer + 4;
+                static char cat_buf[4096];
+                int bytes = fat16_read_file(fname, cat_buf, 4096 - 1);
+                if (bytes >= 0) {
+                    cat_buf[bytes] = '\0';
+                    kprint(cat_buf);
+                } else {
+                    kprint("File not found: ");
+                    kprint(fname);
+                }
+            }
+            else if (strncmp(input_buffer, "timezone ", 9) == 0) {
+                char* tz = input_buffer + 9;
+                if (strcmp(tz, "EST") == 0) {
+                    set_timezone(-5);
+                    reg_set("TOASTOS/KERNEL/TIMEZONE", "EST");
+                    kprint("Timezone set to EST (UTC-5)");
+                } else if (strcmp(tz, "CST") == 0) {
+                    set_timezone(-6);
+                    reg_set("TOASTOS/KERNEL/TIMEZONE", "CST");
+                    kprint("Timezone set to CST (UTC-6)");
+                } else if (strcmp(tz, "PST") == 0) {
+                    set_timezone(-8);
+                    reg_set("TOASTOS/KERNEL/TIMEZONE", "PST");
+                    kprint("Timezone set to PST (UTC-8)");
+                } else if (strcmp(tz, "MST") == 0) {
+                    set_timezone(-7);
+                    reg_set("TOASTOS/KERNEL/TIMEZONE", "MST");
+                    kprint("Timezone set to MST (UTC-7)");
+                } else if (strcmp(tz, "UTC") == 0) {
+                    set_timezone(0);
+                    reg_set("TOASTOS/KERNEL/TIMEZONE", "UTC");
+                    kprint("Timezone set to UTC");
+                } else if (strcmp(tz, "GMT") == 0) {
+                    set_timezone(0);
+                    reg_set("TOASTOS/KERNEL/TIMEZONE", "GMT");
+                    kprint("Timezone set to GMT");
+                } else if (tz[0] == '+' || tz[0] == '-') {
+                    int sign = (tz[0] == '-') ? -1 : 1;
+                    int val = 0;
+                    int i = 1;
+                    while (tz[i] >= '0' && tz[i] <= '9') {
+                        val = val * 10 + (tz[i] - '0');
+                        i++;
+                    }
+                    if (val <= 12) {
+                        set_timezone(sign * val);
+                        kprint("Timezone set to UTC");
+                        kprint(tz);
+                    } else {
+                        kprint("Invalid offset. Use -12 to +12.");
+                    }
+                } else {
+                    kprint("Usage: timezone EST|CST|MST|PST|UTC|GMT|+N|-N");
+                }
+                reg_save();
+                update_top_bar();
+            }
             
+            /* ===== TIMEFORMAT COMMAND ===== */
+            else if (strncmp(input_buffer, "timeformat ", 11) == 0) {
+                char* fmt = input_buffer + 11;
+                if (strcmp(fmt, "12") == 0) {
+                    set_time_format(0);
+                    reg_set("TOASTOS/KERNEL/TIMEFORMAT", "12");
+                    reg_save();
+                    kprint("Clock set to 12-hour format.");
+                } else if (strcmp(fmt, "24") == 0) {
+                    set_time_format(1);
+                    reg_set("TOASTOS/KERNEL/TIMEFORMAT", "24");
+                    reg_save();
+                    kprint("Clock set to 24-hour format.");
+                } else {
+                    kprint("Usage: timeformat 12|24");
+                }
+                update_top_bar();
+            }
+
+            /* ===== REGISTRY COMMANDS ===== */
+            else if (strcmp(input_buffer, "reg list") == 0) {
+                kprint("--- Registry ---");
+                kprint_newline();
+                reg_list();
+            }
+            else if (strncmp(input_buffer, "reg list ", 9) == 0) {
+                char* prefix = input_buffer + 9;
+                kprint("--- Registry: ");
+                kprint(prefix);
+                kprint(" ---");
+                kprint_newline();
+                reg_list_prefix(prefix);
+            }
+            else if (strcmp(input_buffer, "toastsetup reset") == 0) {
+                kprint("Reset setup progress? (y) >");
+                char* opt = rec_input();
+                if (strcmp(opt, "y") == 0) {
+                    reg_set("TOASTOS/KERNEL/SETUPSTATUS", "0");
+                    reg_save();
+                    kprint("Setup reset.");
+                } else {
+                    kprint("Cancelled.");
+                }
+            }
+            else if (strcmp(input_buffer, "whoami") == 0) {
+                const char* uname = reg_get("TOASTOS/KERNEL/NAME");
+                kprint(uname ? uname : "(not set - run 'toastsetup reset' to configure)");
+            }
+            else if (strncmp(input_buffer, "reg set ", 8) == 0) {
+                /* reg set KEY VALUE */
+                char* args = input_buffer + 8;
+                char* space = args;
+                while (*space && *space != ' ') space++;
+                if (*space == ' ') {
+                    *space = '\0';
+                    char* val = space + 1;
+                    if (reg_set(args, val) == 0) {
+                        reg_save();
+                        kprint("Set: ");
+                        kprint(args);
+                        kprint(" = ");
+                        kprint(val);
+                    } else {
+                        kprint("Registry full.");
+                    }
+                } else {
+                    kprint("Usage: reg set <key> <value>");
+                }
+            }
+            else if (strncmp(input_buffer, "reg get ", 8) == 0) {
+                char* key = input_buffer + 8;
+                const char* val = reg_get(key);
+                if (val) {
+                    kprint(key);
+                    kprint(" = ");
+                    kprint(val);
+                } else {
+                    kprint("Key not found: ");
+                    kprint(key);
+                }
+            }
+            else if (strncmp(input_buffer, "reg del ", 8) == 0) {
+                char* key = input_buffer + 8;
+                if (reg_delete(key) == 0) {
+                    reg_save();
+                    kprint("Deleted: ");
+                    kprint(key);
+                } else {
+                    kprint("Key not found: ");
+                    kprint(key);
+                }
+            }
+
+            /* ===== FILE / REGISTRY HELPERS ===== */
+            else if (strcmp(input_buffer, "file -reg save") == 0) {
+                kprint("Saving registry...");
+                reg_save();
+                kprint("Done.");
+                update_top_bar();
+            }
+
             /* ===== DISPLAY COMMANDS ===== */
             else if (strcmp(input_buffer, "cursor-on") == 0) {
                 enable_cursor(0, 15);
@@ -301,9 +768,10 @@ void keyboard_handler_main(void) {
             else if (strcmp(input_buffer, "disk read") == 0 || strcmp(input_buffer, "cat") == 0) {
                 kprint("Filename: ");
                 char* fname = rec_input();
-                static char read_buf[1024];
-                int bytes = fat16_read_file(fname, read_buf, 1024);
+                static char read_buf[4096];
+                int bytes = fat16_read_file(fname, read_buf, 4096 - 1);
                 if (bytes >= 0) {
+                    read_buf[bytes] = '\0';
                     kprint(read_buf);
                 } else {
                     kprint("File not found.");
@@ -313,6 +781,22 @@ void keyboard_handler_main(void) {
                 kprint("Filename: ");
                 char* fname = rec_input();
                 fat16_delete_file(fname);
+            }
+            else if (strcmp(input_buffer, "disk rename") == 0) {
+                kprint("Current filename: ");
+                char* old_name = rec_input();
+                kprint("New filename: ");
+                char* new_name = rec_input();
+                static char rename_buf[4096];
+                int bytes = fat16_read_file(old_name, rename_buf, 4096 - 1);
+                if (bytes >= 0) {
+                    rename_buf[bytes] = '\0';
+                    fat16_create_file(new_name, rename_buf);
+                    fat16_delete_file(old_name);
+                    kprint("Renamed.");
+                } else {
+                    kprint("File not found.");
+                }
             }
             
             /* ===== DEBUG COMMANDS ===== */
@@ -334,9 +818,83 @@ void keyboard_handler_main(void) {
             else if (strcmp(input_buffer, "system-quickinfo") == 0) {
                 kprint("toastOS v1.0 by thetoasta (2025)");
             }
+            else if (strcmp(input_buffer, "system-test multiswitch") == 0) {
+                kprint("Which terminal? (1-6): ");
+                char* term_str = rec_input();
+                if (term_str[0] >= '1' && term_str[0] <= '6') {
+                    int term_idx = term_str[0] - '1';
+                    switch_terminal(term_idx);
+                } else {
+                    kprint("Invalid terminal number.");
+                }
+            }
             else if (strcmp(input_buffer, "fat16-init") == 0) { fat16_init(); }
             else if (strcmp(input_buffer, "fat16-list") == 0) { fat16_list_files(); }
             
+            /* ===== EDITOR ===== */
+            else if (strncmp(input_buffer, "edit ", 5) == 0) {
+                char* fname = input_buffer + 5;
+                editor_open(fname);
+                /* editor_handle_key() takes over; shell redraws on exit */
+                input_index = 0;
+                return;
+            }
+
+            /* ===== TOAST APP ENGINE ===== */
+            else if (strncmp(input_buffer, "toast app engine ", 17) == 0) {
+                char* fname = input_buffer + 17;
+                if (fname[0] == '\0') {
+                    kprint("Usage: toast app engine <file.tsc>");
+                } else {
+                    editor_open_ide(fname);
+                    input_index = 0;
+                    return;
+                }
+            }
+
+            /* ===== EXTERNAL APP LOADER ===== */
+            else if (strncmp(input_buffer, "exec ", 5) == 0) {
+                char* fname = input_buffer + 5;
+                int result = exec_run(fname);
+                if (result == EXEC_ERR_NOTFOUND) {
+                    kprint("[exec] File not found on disk.");
+                } else if (result == EXEC_ERR_ELF) {
+                    kprint("[exec] Not a valid .tapp ELF binary.");
+                } else if (result == EXEC_ERR_SEGSEC) {
+                    kprint("[exec] Blocked: binary targets restricted memory.");
+                } else if (result == EXEC_ERR_NOMETA) {
+                    kprint("[exec] Blocked: missing .tapp_meta section.");
+                } else if (result == EXEC_ERR_DENIED) {
+                    kprint("[exec] Launch cancelled by user.");
+                }
+            }
+
+            /* ===== APP LAUNCHER ===== */
+            else if (strncmp(input_buffer, "run ", 4) == 0) {
+                char* app_name = input_buffer + 4;
+                int found = 0;
+                for (int i = 0; i < app_count; i++) {
+                    if (strcmp(app_name, app_list[i].name) == 0) {
+                        found = 1;
+                        kprint("[toastSecurity] toastOS Applications are not currently protected. Please make sure this app is safe. \nType OK to open this app.");
+                        kprint_newline();
+                        char* openauth = rec_input();
+                        if (strcmp(openauth, "OK") != 0) {
+                            kprint_newline();
+                            kprint("[toastSecurity] Cancelled opening this app.");
+                            break;
+                        }
+                        int id = register_app(app_list[i].name, app_list[i].permissions);
+                        app_list[i].entry(id);
+                        break;
+                    }
+                }
+                if (!found) {
+                    kprint("App not found: ");
+                    kprint(app_name);
+                }
+            }
+
             /* ===== UNKNOWN COMMAND ===== */
             else if (strcmp(input_buffer, "") != 0) {
                 kprint("Unknown command. Type 'help' for commands.");
@@ -348,7 +906,8 @@ void keyboard_handler_main(void) {
             return;
         }
 
-        char c = keyboard_map[(unsigned char)keycode];
+        char c = shift_held ? keyboard_map_shifted[(unsigned char)keycode]
+                             : keyboard_map[(unsigned char)keycode];
         if (c == '\b' && input_index > 0) {
             // Handle backspace: remove the last character from the buffer and screen
             input_index--;
@@ -363,34 +922,106 @@ void keyboard_handler_main(void) {
             update_cursor((current_loc / 2) % COLUMNS_IN_LINE, (current_loc / 2) / COLUMNS_IN_LINE);
         }
     }
+    return;
+
+    /* ---- ToastScript IDE run handler ---- */
+do_tscript_run: {
+        static char ts_run_buf[EDITOR_MAX_FILESIZE];
+        const char *fn = editor_get_filename();
+        int r = fat16_read_file(fn, ts_run_buf, EDITOR_MAX_FILESIZE - 1);
+        if (r < 0) {
+            clear_screen();
+            kprint_newline();
+            kprint("[tscript] Could not read file.");
+        } else {
+            ts_run_buf[r] = '\0';
+            tscript_run(ts_run_buf);
+        }
+        kprint_newline();
+        kprint("[press any key to return to editor]");
+        /* poll for a keypress */
+        while (!(read_port(KEYBOARD_STATUS_PORT) & 0x01))
+            __asm__ volatile("hlt");
+        (void)read_port(KEYBOARD_DATA_PORT);  /* consume scancode */
+        /* reopen editor in IDE mode */
+        editor_open_ide(fn);
+        return;
+    }
 }
 
 char* rec_input(void) {
     static char temp_buffer[KEYBOARD_INPUT_LENGTH];
     int temp_index = 0;
+    static uint8_t got_e0 = 0;
     
+    /* Save current IRQ mask so we restore to it (not unconditionally to 0xFC),
+       allowing callers like disk_operations_terminal to keep IRQ1 masked. */
+    uint8_t saved_irq_mask = read_port(0x21);
+
+    /* Send EOI for the keyboard IRQ that got us here.
+       Mask IRQ1 (keyboard) so the ISR won't steal our polled keystrokes,
+       but leave IRQ0 (timer) enabled so the clock keeps ticking. */
+    write_port(0x20, 0x20);          /* EOI */
+    write_port(0x21, saved_irq_mask | 0x02);   /* mask IRQ1, preserve others */
+    __asm__ volatile("sti");
+
     while(1) {
+        __asm__ volatile("hlt");  /* sleep until next interrupt */
         unsigned char status = read_port(KEYBOARD_STATUS_PORT);
         if (status & 0x01) {
             char keycode = read_port(KEYBOARD_DATA_PORT);
             
-            // Ignore key release events (bit 7 set)
+            // Handle key release events (bit 7 set)
+            if ((unsigned char)keycode == 0xE0) {
+                got_e0 = 1;
+                continue;
+            }
             if (keycode & 0x80) {
+                unsigned char released = keycode & 0x7F;
+                if (released == 0x2A || released == 0x36) {
+                    shift_held = 0;
+                }
+                got_e0 = 0;
                 continue;
             }
             
-            // Ignore extended keys (E0 prefix)
-            if ((unsigned char)keycode == 0xE0) {
+            // Handle E0-prefixed keys
+            if (got_e0) {
+                got_e0 = 0;
+                if ((uint8_t)keycode == 0x53) {
+                    write_port(0x21, saved_irq_mask);   /* restore IRQ mask */
+                    l1_panic("Delete initiated quick panic");
+                }
                 continue;
             }
             
             if (keycode == ENTER_KEY_CODE) {
                 temp_buffer[temp_index] = '\0';
                 kprint_newline();
+                write_port(0x21, saved_irq_mask);       /* restore IRQ mask */
                 return temp_buffer;
             }
 
-            char c = keyboard_map[(unsigned char)keycode];
+            // Track shift in rec_input too
+            if ((unsigned char)keycode == 0x2A || (unsigned char)keycode == 0x36) {
+                shift_held = 1;
+                continue;
+            }
+
+            // Backslash (0x2B) to exit current app
+            if ((unsigned char)keycode == 0x2B) {
+                exitapp(0);
+                kprint_newline();
+                kprint("App terminated by user.");
+                kprint_newline();
+                kprint("toastOS > ");
+                temp_buffer[0] = '\0';
+                write_port(0x21, saved_irq_mask);       /* restore IRQ mask */
+                return temp_buffer;
+            }
+
+            char c = shift_held ? keyboard_map_shifted[(unsigned char)keycode]
+                                : keyboard_map[(unsigned char)keycode];
             if (c == '\b' && temp_index > 0) {
                 temp_index--;
                 current_loc -= 2;
@@ -407,9 +1038,86 @@ char* rec_input(void) {
     }
 }
 
+static void save_current_terminal(void) {
+    VirtualTerminal *term = &terminals[current_terminal];
+    // Save screen content (skip top bar at line 0)
+    for (unsigned int i = 160; i < SCREENSIZE; i++) {
+        term->screen_buffer[i] = vidptr[i];
+    }
+    // Save input state
+    for (unsigned int i = 0; i < KEYBOARD_INPUT_LENGTH; i++) {
+        term->input_buffer[i] = input_buffer[i];
+    }
+    term->input_index = input_index;
+    term->cursor_loc = current_loc;
+    term->bg_color = screen_bg_color;
+    term->active = 1;
+}
+
+static void restore_terminal(int term_idx) {
+    VirtualTerminal *term = &terminals[term_idx];
+    if (term->active) {
+        // Restore screen content (skip top bar)
+        for (unsigned int i = 160; i < SCREENSIZE; i++) {
+            vidptr[i] = term->screen_buffer[i];
+        }
+        // Restore input state
+        for (unsigned int i = 0; i < KEYBOARD_INPUT_LENGTH; i++) {
+            input_buffer[i] = term->input_buffer[i];
+        }
+        input_index = term->input_index;
+        current_loc = term->cursor_loc;
+        screen_bg_color = term->bg_color;
+    } else {
+        // Fresh terminal - initialize
+        clear_screen();
+        const char* uname = reg_get("TOASTOS/KERNEL/NAME");
+        if (uname) {
+            kprint("Welcome back, ");
+            kprint(uname);
+        } else {
+            kprint("Welcome to toastOS");
+        }
+        kprint_newline();
+        kprint_newline();
+        kprint("toastOS > ");
+        term->active = 1;
+    }
+}
+
+static void switch_terminal(int term_idx) {
+    if (term_idx == current_terminal || term_idx >= runtime_num_terminals) {
+        return;
+    }
+    save_current_terminal();
+    current_terminal = term_idx;
+    restore_terminal(term_idx);
+    update_top_bar();
+    int x = (current_loc / 2) % COLUMNS_IN_LINE;
+    int y = (current_loc / 2) / COLUMNS_IN_LINE;
+    update_cursor(x, y);
+}
+
 void init_shell(void) {
+    // Initialize all terminals as inactive
+    for (int i = 0; i < runtime_num_terminals; i++) {
+        terminals[i].active = 0;
+        terminals[i].input_index = 0;
+        terminals[i].cursor_loc = 160;
+        terminals[i].bg_color = BLACK;
+    }
+    current_terminal = 0;
+    terminals[0].active = 1;
+    
     clear_screen();
-    kprint("toastOS System :O");
+    update_top_bar();
+    const char* uname = reg_get("TOASTOS/KERNEL/NAME");
+    if (uname) {
+        kprint("Welcome back, ");
+        kprint(uname);
+    } else {
+        kprint("Welcome to toastOS");
+    }
     kprint_newline();
     kprint("toastOS > ");
     enable_cursor(0, 15);
@@ -417,7 +1125,14 @@ void init_shell(void) {
 }
 
 void panic_init(void) {
-    kprint("toastOS System :O");
+    update_top_bar();
+    const char* uname = reg_get("TOASTOS/KERNEL/NAME");
+    if (uname) {
+        kprint("Welcome back, ");
+        kprint(uname);
+    } else {
+        kprint("Welcome to toastOS");
+    }
     kprint_newline();
     kprint("toastOS > ");
     enable_cursor(0, 15);
@@ -451,22 +1166,35 @@ void disk_operations_terminal(void) {
     kprint_newline();
     kprint("    del     - Delete a file");
     kprint_newline();
+    kprint("    rename  - Rename a file");
+    kprint_newline();
     kprint("    install - Install toastOS to disk");
     kprint_newline();
     kprint("    exit    - Return to toastOS shell");
     kprint_newline();
     kprint_newline();
     
+    /* Mask IRQ1 (keyboard) so the main ISR cannot fire while we own the keyboard */
+    write_port(0x21, read_port(0x21) | 0x02);
+
     while (1) {
         toast_shell_color("disk> ", LIGHT_CYAN);
         char* cmd = rec_input();
         
         if (strcmp(cmd, "exit") == 0 || strcmp(cmd, "quit") == 0) {
+            /* Restore keyboard IRQ before handing back to main shell */
+            write_port(0x21, read_port(0x21) & ~0x02);
             clear_screen_color(BLACK);
-            kprint("toastOS System :O");
+            const char* uname = reg_get("TOASTOS/KERNEL/NAME");
+            if (uname) {
+                kprint("Welcome back, ");
+                kprint(uname);
+            } else {
+                kprint("Welcome to toastOS");
+            }
             kprint_newline();
             kprint("toastOS > ");
-            return;
+            break;
         }
         else if (strcmp(cmd, "write") == 0) {
             kprint("Filename: ");
@@ -478,9 +1206,10 @@ void disk_operations_terminal(void) {
         else if (strcmp(cmd, "read") == 0) {
             kprint("Filename: ");
             char* fname = rec_input();
-            static char read_buf[1024];
-            int bytes = fat16_read_file(fname, read_buf, 1024);
+            static char read_buf[4096];
+            int bytes = fat16_read_file(fname, read_buf, 4096 - 1);
             if (bytes >= 0) {
+                read_buf[bytes] = '\0';
                 kprint("Contents: ");
                 kprint(read_buf);
                 kprint_newline();
@@ -533,8 +1262,26 @@ void disk_operations_terminal(void) {
         else if (strcmp(cmd, "install") == 0) {
             toastos_install();
         }
+        else if (strcmp(cmd, "rename") == 0) {
+            kprint("Current filename: ");
+            char* old_name = rec_input();
+            kprint("New filename: ");
+            char* new_name = rec_input();
+            static char ren_buf[4096];
+            int bytes = fat16_read_file(old_name, ren_buf, 4096 - 1);
+            if (bytes >= 0) {
+                ren_buf[bytes] = '\0';
+                fat16_create_file(new_name, ren_buf);
+                fat16_delete_file(old_name);
+                toast_shell_color("Renamed.", LIGHT_GREEN);
+                kprint_newline();
+            } else {
+                toast_shell_color("Error: File not found.", LIGHT_RED);
+                kprint_newline();
+            }
+        }
         else if (strcmp(cmd, "help") == 0) {
-            kprint("Commands: write, read, format, erase, init, list, del, install, exit");
+            kprint("Commands: write, read, rename, format, erase, init, list, del, install, exit");
             kprint_newline();
         }
         else if (strcmp(cmd, "") != 0) {
@@ -806,6 +1553,7 @@ void toastos_install(void) {
 
 
 void toast_shell_color(const char* str, uint8_t color) {
+    if (!str) return;
     unsigned int i = 0;
     while (str[i]) {
         vidptr[current_loc++] = str[i++];
@@ -823,6 +1571,45 @@ static uint8_t parse_hex_nibble(const char* s) {
     if (c >= 'A' && c <= 'F') return (uint8_t)(10 + (c - 'A'));
     return 0;
 }
+
+unsigned char keyboard_map_shifted[128] = {
+    0,  27, '!', '@', '#', '$', '%', '^', '&', '*',    /* 9 */
+    '(', ')', '_', '+', '\b',    /* Backspace */
+    '\t',            /* Tab */
+    'Q', 'W', 'E', 'R',  /* 19 */
+    'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',    /* Enter */
+    0,         /* Control */
+    'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':',    /* 39 */
+    '"', '~',   0,       /* Left shift */
+    '|', 'Z', 'X', 'C', 'V', 'B', 'N',           /* 49 */
+    'M', '<', '>', '?',   0,             /* Right shift */
+    '*',
+    0, /* Alt */
+    ' ', /* Space */
+    0, /* Caps lock */
+    0, /* F1 - F10 keys */
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, /* F10 */
+    0, /* Num lock */
+    0, /* Scroll lock */
+    0, /* Home */
+    0, /* Up Arrow */
+    0, /* Page Up */
+    '-',
+    0, /* Left Arrow */
+    0,
+    0, /* Right Arrow */
+    '+',
+    0, /* End */
+    0, /* Down Arrow */
+    0, /* Page Down */
+    0, /* Insert */
+    0, /* Delete */
+    0, 0, 0,
+    0, /* F11 */
+    0, /* F12 */
+    0  /* Undefined keys */
+};
 
 unsigned char keyboard_map[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8',    /* 9 */
