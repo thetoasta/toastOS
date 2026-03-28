@@ -22,4 +22,22 @@ void set_time_format(int is_24hr);
 int get_time_format(void);
 uint32_t get_uptime_seconds(void);
 
+/* ===== ALARM SYSTEM ===== */
+#define MAX_ALARMS 8
+#define ALARM_NOTE_LEN 64
+
+typedef struct {
+    uint8_t active;
+    uint8_t hour;
+    uint8_t minute;
+    char    note[ALARM_NOTE_LEN];
+} Alarm;
+
+int  alarm_set(uint8_t hour, uint8_t minute, const char *note);
+void alarm_clear(int index);
+void alarm_clear_all(void);
+int  alarm_count(void);
+const Alarm* alarm_get(int index);
+void alarm_check(void);
+
 #endif

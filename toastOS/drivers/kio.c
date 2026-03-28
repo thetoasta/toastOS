@@ -480,6 +480,8 @@ void keyboard_handler_main(void) {
                 kprint_newline();
                 kprint("  Time:      date, uptime, timezone <tz>, timeformat 12|24");
                 kprint_newline();
+                kprint("  Alarms:    alarm set HH:MM [note], alarm list, alarm clear");
+                kprint_newline();
                 kprint("  Disk:      disk, ls, cat <file>, rm, disk write, disk rename");
                 kprint_newline();
                 kprint("  Apps:      apps, run <app>, exec <file.tapp>");
@@ -578,6 +580,25 @@ void keyboard_handler_main(void) {
                 for (int i = 0; i < app_count; i++) {
                     kprint("  ");
                     kprint(app_list[i].name);
+                    kprint_newline();
+                }
+                kprint_newline();
+                kprint("Running apps:");
+                kprint_newline();
+                int any_running = 0;
+                for (int t = 0; t < 6; t++) {
+                    AppContext* ac = get_app_context_for_terminal(t);
+                    if (ac && ac->initialized) {
+                        any_running = 1;
+                        kprint("  Terminal ");
+                        print_num((uint32_t)(t + 1));
+                        kprint(": ");
+                        kprint(ac->app_name);
+                        kprint_newline();
+                    }
+                }
+                if (!any_running) {
+                    kprint("  (none)");
                     kprint_newline();
                 }
             }
@@ -914,26 +935,31 @@ void keyboard_handler_main(void) {
             /* ===== APP LAUNCHER ===== */
             else if (strncmp(input_buffer, "run ", 4) == 0) {
                 char* app_name = input_buffer + 4;
-                int found = 0;
-                for (int i = 0; i < app_count; i++) {
-                    if (strcmp(app_name, app_list[i].name) == 0) {
-                        found = 1;
-                        kprint("[toastSecurity] toastOS Applications are not currently protected. Please make sure this app is safe. \nType OK to open this app.");
-                        kprint_newline();
-                        char* openauth = rec_input();
-                        if (strcmp(openauth, "OK") != 0) {
+                /* Check if this terminal already has an app running */
+                if (terminal_has_app(current_terminal)) {
+                    kprint("An app is already running in this terminal. Switch to another terminal (Alt+1-6) or exit the current app first.");
+                } else {
+                    int found = 0;
+                    for (int i = 0; i < app_count; i++) {
+                        if (strcmp(app_name, app_list[i].name) == 0) {
+                            found = 1;
+                            kprint("[toastSecurity] toastOS Applications are not currently protected. Please make sure this app is safe. \nType OK to open this app.");
                             kprint_newline();
-                            kprint("[toastSecurity] Cancelled opening this app.");
+                            char* openauth = rec_input();
+                            if (strcmp(openauth, "OK") != 0) {
+                                kprint_newline();
+                                kprint("[toastSecurity] Cancelled opening this app.");
+                                break;
+                            }
+                            int id = register_app(app_list[i].name, app_list[i].permissions);
+                            app_list[i].entry(id);
                             break;
                         }
-                        int id = register_app(app_list[i].name, app_list[i].permissions);
-                        app_list[i].entry(id);
-                        break;
                     }
-                }
-                if (!found) {
-                    kprint("App not found: ");
-                    kprint(app_name);
+                    if (!found) {
+                        kprint("App not found: ");
+                        kprint(app_name);
+                    }
                 }
             }
 
@@ -970,6 +996,98 @@ void keyboard_handler_main(void) {
                 if (net_init() == 0) {
                     net_print_local_ip();
                 }
+            }
+
+            /* ===== ALARM COMMANDS ===== */
+            else if (strncmp(input_buffer, "alarm set ", 10) == 0) {
+                /* alarm set HH:MM [note] */
+                char* args = input_buffer + 10;
+                /* parse HH:MM */
+                int h = 0, m = 0;
+                int pos = 0;
+                while (args[pos] >= '0' && args[pos] <= '9') {
+                    h = h * 10 + (args[pos] - '0');
+                    pos++;
+                }
+                if (args[pos] == ':') {
+                    pos++;
+                    while (args[pos] >= '0' && args[pos] <= '9') {
+                        m = m * 10 + (args[pos] - '0');
+                        pos++;
+                    }
+                }
+                if (h < 0 || h > 23 || m < 0 || m > 59) {
+                    kprint("Invalid time. Use HH:MM (24hr).");
+                } else {
+                    const char *note = (args[pos] == ' ') ? &args[pos + 1] : "";
+                    int slot = alarm_set((uint8_t)h, (uint8_t)m, note);
+                    if (slot >= 0) {
+                        kprint("Alarm set for ");
+                        if (h < 10) kprint("0");
+                        print_num((uint32_t)h);
+                        kprint(":");
+                        if (m < 10) kprint("0");
+                        print_num((uint32_t)m);
+                        if (note[0]) {
+                            kprint(" - ");
+                            kprint(note);
+                        }
+                    } else {
+                        kprint("No free alarm slots (max 8).");
+                    }
+                }
+            }
+            else if (strcmp(input_buffer, "alarm list") == 0) {
+                int found = 0;
+                for (int ai = 0; ai < MAX_ALARMS; ai++) {
+                    const Alarm* a = alarm_get(ai);
+                    if (a && a->active) {
+                        found = 1;
+                        kprint("  [");
+                        print_num((uint32_t)ai);
+                        kprint("] ");
+                        if (a->hour < 10) kprint("0");
+                        print_num((uint32_t)a->hour);
+                        kprint(":");
+                        if (a->minute < 10) kprint("0");
+                        print_num((uint32_t)a->minute);
+                        if (a->note[0]) {
+                            kprint(" - ");
+                            kprint(a->note);
+                        }
+                        kprint_newline();
+                    }
+                }
+                if (!found) {
+                    kprint("No alarms set.");
+                }
+            }
+            else if (strncmp(input_buffer, "alarm clear ", 12) == 0) {
+                char* idx_str = input_buffer + 12;
+                if (strcmp(idx_str, "all") == 0) {
+                    alarm_clear_all();
+                    kprint("All alarms cleared.");
+                } else {
+                    int idx = 0;
+                    while (*idx_str >= '0' && *idx_str <= '9') {
+                        idx = idx * 10 + (*idx_str - '0');
+                        idx_str++;
+                    }
+                    const Alarm* a = alarm_get(idx);
+                    if (a && a->active) {
+                        alarm_clear(idx);
+                        kprint("Alarm cleared.");
+                    } else {
+                        kprint("No active alarm at that index.");
+                    }
+                }
+            }
+            else if (strcmp(input_buffer, "alarm") == 0) {
+                kprint("Usage: alarm set HH:MM [note]");
+                kprint_newline();
+                kprint("       alarm list");
+                kprint_newline();
+                kprint("       alarm clear <id|all>");
             }
 
             /* ===== UNKNOWN COMMAND ===== */

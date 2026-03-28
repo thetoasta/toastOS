@@ -16,23 +16,43 @@ Apps CANNOT self-assign IDs or permissions. The kernel calls register_app().
 #include "../drivers/toast_libc.h"
 #include "tapplayer.h"
 
-static AppContext current_app = {0};
+static AppContext app_slots[MAX_APP_SLOTS] = {{0}};
 static int next_app_id = 100;
 
-/* Called by the KERNEL only - assigns ID and permissions to the app */
+/* Helper: get the slot for the current terminal */
+static AppContext* current_slot(void) {
+    int t = get_current_terminal();
+    if (t < 0 || t >= MAX_APP_SLOTS) t = 0;
+    return &app_slots[t];
+}
+
+/* Called by the KERNEL only - assigns ID and permissions to the app
+   in the current terminal's slot */
 int register_app(char* app_name, int permissions) {
-    current_app.app_name = app_name;
-    current_app.app_id = next_app_id++;
-    current_app.permissions = permissions;
-    current_app.initialized = 1;
-    return current_app.app_id;
+    AppContext* ctx = current_slot();
+    ctx->app_name = app_name;
+    ctx->app_id = next_app_id++;
+    ctx->permissions = permissions;
+    ctx->initialized = 1;
+    return ctx->app_id;
 }
 
 AppContext* get_app_context(void) {
-    if (!current_app.initialized) {
+    AppContext* ctx = current_slot();
+    if (!ctx->initialized) {
         l1_panic("A app has tried to do something protected. toastOS has stopped. (Code: NOT_AUTHORIZED)");
     }
-    return &current_app;
+    return ctx;
+}
+
+AppContext* get_app_context_for_terminal(int term) {
+    if (term < 0 || term >= MAX_APP_SLOTS) return NULL;
+    return &app_slots[term];
+}
+
+int terminal_has_app(int term) {
+    if (term < 0 || term >= MAX_APP_SLOTS) return 0;
+    return app_slots[term].initialized;
 }
 
 static int has_permission(int perm) {
@@ -42,11 +62,12 @@ static int has_permission(int perm) {
 
 void newline() {
     if (!has_permission(PERM_PRINT)) {
+        AppContext* ctx = current_slot();
         kprint("[DENIED] App '");
-        kprint(current_app.app_name);
+        kprint(ctx->app_name);
         kprint("' lacks PRINT permission.");
         kprint_newline();
-        killapp(current_app.app_id, "PRINT permission denied");
+        killapp(ctx->app_id, "PRINT permission denied");
         return;
     }
     kprint_newline();
@@ -54,11 +75,12 @@ void newline() {
 
 void print(char* string) {
     if (!has_permission(PERM_PRINT)) {
+        AppContext* ctx = current_slot();
         kprint("[DENIED] App '");
-        kprint(current_app.app_name);
+        kprint(ctx->app_name);
         kprint("' lacks PRINT permission.");
         kprint_newline();
-        killapp(current_app.app_id, "PRINT permission denied");
+        killapp(ctx->app_id, "PRINT permission denied");
         return;
     }
     kprint(string);
@@ -69,8 +91,9 @@ void print(char* string) {
 
 void panic(char* reason, int severe) {
     if (!has_permission(PERM_PANIC)) {
+        AppContext* ctx = current_slot();
         kprint("[DENIED] App '");
-        kprint(current_app.app_name);
+        kprint(ctx->app_name);
         kprint("' lacks PANIC permission.");
         kprint_newline();
         return;
@@ -93,25 +116,27 @@ void panic(char* reason, int severe) {
 }
 
 void exitapp(int exit_code) {
-    AppContext* ctx = get_app_context();
-    current_app.initialized = 0;
-    current_app.permissions = 0;
-    current_app.app_name = 0;
-    current_app.app_id = 0;
+    AppContext* ctx = current_slot();
+    ctx->initialized = 0;
+    ctx->permissions = 0;
+    ctx->app_name = 0;
+    ctx->app_id = 0;
 }
 
 void killapp(int app_id, char* reason) {
-    if (current_app.app_id == app_id) {
-        current_app.initialized = 0;
-        current_app.permissions = 0;
-        kprint("A service has killed the app ");
-        kprint(current_app.app_name);
-        kprint(" with the ID of ");
-        // kprint(current_app.app_id);
-        kprint(". The reason was ");
-        kprint(reason);
-        kprint(".");
-        current_app.app_name = 0;
-        current_app.app_id = 0;
+    /* Search all slots for the matching app_id */
+    for (int s = 0; s < MAX_APP_SLOTS; s++) {
+        if (app_slots[s].app_id == app_id) {
+            kprint("A service has killed the app ");
+            kprint(app_slots[s].app_name);
+            kprint(". The reason was ");
+            kprint(reason);
+            kprint(".");
+            app_slots[s].initialized = 0;
+            app_slots[s].permissions = 0;
+            app_slots[s].app_name = 0;
+            app_slots[s].app_id = 0;
+            return;
+        }
     }
 }

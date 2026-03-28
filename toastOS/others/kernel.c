@@ -119,7 +119,5 @@ void kmain(unsigned long magic, unsigned long addr)
         __asm__ volatile ("cli; hlt");
     }
 
-    init_shell();
-
 	while(1);
 }

@@ -182,6 +182,7 @@ void timer_handler() {
     ticks++;
     if (ticks % 18 == 0) { // Roughly every second (18.2 Hz is standard ticker)
         update_top_bar();
+        alarm_check();
     }
     // Don't auto-save registry from timer - only on explicit reg_save() calls
     // Send EOI to PIC (Master only since IRQ0)
@@ -253,5 +254,208 @@ void update_top_bar() {
     write_time_string(76, 0, t.second);
     if (!use_24hr) {
         write_string_at(78, 0, adjusted_hour < 12 ? "AM" : "PM", ((BLUE << 4) | WHITE));
+    }
+
+    /* Show alarm indicator if any alarms are set */
+    if (alarm_count() > 0) {
+        write_string_at(50, 0, "ALM", ((BLUE << 4) | YELLOW));
+    }
+}
+
+/* ===== ALARM SYSTEM ===== */
+
+#define ENTER_KEY_CODE_LOCAL 0x1C
+
+static Alarm alarms[MAX_ALARMS];
+static volatile int alarm_firing = 0;  /* prevent re-entry */
+
+int alarm_set(uint8_t hour, uint8_t minute, const char *note) {
+    for (int i = 0; i < MAX_ALARMS; i++) {
+        if (!alarms[i].active) {
+            alarms[i].active = 1;
+            alarms[i].hour   = hour;
+            alarms[i].minute = minute;
+            if (note) {
+                int j = 0;
+                while (note[j] && j < ALARM_NOTE_LEN - 1) {
+                    alarms[i].note[j] = note[j];
+                    j++;
+                }
+                alarms[i].note[j] = '\0';
+            } else {
+                alarms[i].note[0] = '\0';
+            }
+            return i;
+        }
+    }
+    return -1; /* no free slot */
+}
+
+void alarm_clear(int index) {
+    if (index >= 0 && index < MAX_ALARMS) {
+        alarms[index].active = 0;
+    }
+}
+
+void alarm_clear_all(void) {
+    for (int i = 0; i < MAX_ALARMS; i++) {
+        alarms[i].active = 0;
+    }
+}
+
+int alarm_count(void) {
+    int c = 0;
+    for (int i = 0; i < MAX_ALARMS; i++) {
+        if (alarms[i].active) c++;
+    }
+    return c;
+}
+
+const Alarm* alarm_get(int index) {
+    if (index >= 0 && index < MAX_ALARMS) return &alarms[index];
+    return (const Alarm*)0;
+}
+
+/* Called from timer_handler every second. If an alarm matches the current
+   time (hour:minute, adjusted for timezone), take over the screen with a
+   flashing red alert and block until the user types "OK". */
+void alarm_check(void) {
+    if (alarm_firing) return;
+
+    time_t t = get_time();
+    int adj_h = (int)t.hour + timezone_offset;
+    if (adj_h < 0)  adj_h += 24;
+    if (adj_h >= 24) adj_h -= 24;
+
+    for (int i = 0; i < MAX_ALARMS; i++) {
+        if (!alarms[i].active) continue;
+        if ((uint8_t)adj_h == alarms[i].hour && t.minute == alarms[i].minute) {
+            alarm_firing = 1;
+
+            /* --- save IRQ state and switch to polled keyboard --- */
+            uint8_t saved_mask = read_port(0x21);
+            write_port(0x20, 0x20);
+            write_port(0x21, saved_mask | 0x02);  /* mask IRQ1 */
+            __asm__ volatile("sti");
+
+            volatile char *vid = (volatile char *)0xB8000;
+            int ok_index = 0;
+            int flash = 0;
+            uint32_t frame = 0;
+
+            while (1) {
+                /* Red background stays constant; text blinks on/off ~1s */
+                uint8_t bg = RED;
+                uint8_t bg_attr   = (uint8_t)((bg << 4) | bg);     /* invisible: fg=bg */
+                uint8_t text_attr = (uint8_t)((bg << 4) | WHITE);
+                uint8_t title_attr = flash ? (uint8_t)((bg << 4) | YELLOW) : bg_attr;
+                uint8_t body_attr  = flash ? text_attr : bg_attr;
+
+                /* fill screen with solid red */
+                for (int p = 0; p < 80 * 25 * 2; p += 2) {
+                    vid[p]     = ' ';
+                    vid[p + 1] = (uint8_t)((bg << 4) | WHITE);
+                }
+
+                /* Title */
+                const char *title = "!! ALARM !!";
+                int tx = 34;
+                for (int c = 0; title[c]; c++) {
+                    int off = (5 * 80 + tx + c) * 2;
+                    vid[off]     = title[c];
+                    vid[off + 1] = title_attr;
+                }
+
+                /* Time display HH:MM */
+                char tbuf[6];
+                tbuf[0] = '0' + (alarms[i].hour / 10);
+                tbuf[1] = '0' + (alarms[i].hour % 10);
+                tbuf[2] = ':';
+                tbuf[3] = '0' + (alarms[i].minute / 10);
+                tbuf[4] = '0' + (alarms[i].minute % 10);
+                tbuf[5] = '\0';
+                int timex = 37;
+                for (int c = 0; tbuf[c]; c++) {
+                    int off = (8 * 80 + timex + c) * 2;
+                    vid[off]     = tbuf[c];
+                    vid[off + 1] = title_attr;
+                }
+
+                /* Note */
+                if (alarms[i].note[0]) {
+                    int nlen = 0;
+                    while (alarms[i].note[nlen]) nlen++;
+                    int nx = 40 - (nlen / 2);
+                    if (nx < 0) nx = 0;
+                    for (int c = 0; alarms[i].note[c]; c++) {
+                        int off = (11 * 80 + nx + c) * 2;
+                        vid[off]     = alarms[i].note[c];
+                        vid[off + 1] = body_attr;
+                    }
+                }
+
+                /* Prompt — always visible so user knows what to do */
+                const char *prompt = "Type OK to dismiss";
+                int px = 31;
+                for (int c = 0; prompt[c]; c++) {
+                    int off = (15 * 80 + px + c) * 2;
+                    vid[off]     = prompt[c];
+                    vid[off + 1] = text_attr;
+                }
+
+                /* Show what user has typed so far (always visible) */
+                if (ok_index > 0) {
+                    char partial[3] = {0, 0, 0};
+                    if (ok_index >= 1) partial[0] = 'O';
+                    if (ok_index >= 2) partial[1] = 'K';
+                    int inp_x = 39;
+                    for (int c = 0; partial[c]; c++) {
+                        int off = (17 * 80 + inp_x + c) * 2;
+                        vid[off]     = partial[c];
+                        vid[off + 1] = (uint8_t)((bg << 4) | LIGHT_GREEN);
+                    }
+                }
+
+                /* ~1 second on, ~1 second off (18 ticks ≈ 1s) */
+                for (int w = 0; w < 18; w++) {
+                    __asm__ volatile("hlt");
+                    /* check keyboard each tick so dismiss feels responsive */
+                    unsigned char ks = read_port(0x64);
+                    if (ks & 0x01) {
+                        char kc = read_port(0x60);
+                        if (!((unsigned char)kc & 0x80)) {
+                            if ((unsigned char)kc == 0x18 && ok_index == 0)
+                                ok_index = 1;
+                            else if ((unsigned char)kc == 0x25 && ok_index == 1)
+                                ok_index = 2;
+                            else if ((unsigned char)kc == ENTER_KEY_CODE_LOCAL && ok_index == 2)
+                                goto alarm_dismissed;
+                            else if ((unsigned char)kc == 0x0E) {
+                                if (ok_index > 0) ok_index--;
+                            } else
+                                ok_index = 0;
+                        }
+                    }
+                }
+                frame++;
+                flash = !flash;
+            }
+
+            alarm_dismissed:
+            /* Deactivate this alarm */
+            alarms[i].active = 0;
+
+            /* Restore IRQ */
+            write_port(0x21, saved_mask);
+            alarm_firing = 0;
+
+            /* Redraw screen - clear and let the top bar restore */
+            for (int p = 0; p < 80 * 25 * 2; p += 2) {
+                vid[p]     = ' ';
+                vid[p + 1] = 0x07;
+            }
+            update_top_bar();
+            return; /* only handle one alarm per tick */
+        }
     }
 }

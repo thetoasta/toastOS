@@ -23,7 +23,7 @@ typedef struct {
     int permissions;
 } AppContext;
 
-
+#define MAX_APP_SLOTS 6  /* one per terminal */
 
 /* Kernel assigns the app ID and permissions - apps cannot self-assign */
 int register_app(char* app_name, int permissions);
@@ -31,6 +31,8 @@ void exitapp(int exit_code);
 void killapp(int app_id, char* reason);
 
 AppContext* get_app_context(void);
+AppContext* get_app_context_for_terminal(int term);
+int terminal_has_app(int term);
 
 void print(char* string);
 void panic(char* reason, int severe);
