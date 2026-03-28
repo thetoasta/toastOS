@@ -18,6 +18,7 @@ void setupProgram();
 
 
 void setupProgram() {
+    clear_screen();
     kprint("Welcome to toastOS. What's your name?");
     kprint_newline();
     kprint("> ");
@@ -34,6 +35,7 @@ void setupProgram() {
     kprint(name);
     kprint("!");
     kprint_newline();
+    clear_screen();
     kprint("Let's get you set up. At the top of the screen, you see a menu bar.");
     kprint_newline();
     kprint("That menu bar contains the time. We need to make it your timezone and options.");
@@ -44,6 +46,7 @@ void setupProgram() {
     kprint_newline();
     kprint("What's the timezone? > ");
     char* tz = rec_input();
+    clear_screen();
     kprint_newline();
     if (strcmp(tz, "EST") == 0) {
         set_timezone(-5);
@@ -79,6 +82,7 @@ void setupProgram() {
         }
         if (val <= 12) {
             set_timezone(sign * val);
+            reg_set("TOASTOS/KERNEL/TIMEZONE", tz);
             kprint("Timezone set to UTC");
             kprint(tz);
         } else {
@@ -92,6 +96,16 @@ void setupProgram() {
     reg_set("TOASTOS/KERNEL/SETUPSTATUS", "1");
     reg_save();
     kprint_newline();
+    clear_screen();
     kprint("All done! Let's go into toastOS now!");
     kprint_newline();
+    kprint("made with <3 by toasta !");
+
+    /* Keep the final setup splash visible briefly before entering shell. */
+    {
+        uint32_t start = get_uptime_seconds();
+        while ((get_uptime_seconds() - start) < 4) {
+            __asm__ volatile("hlt");
+        }
+    }
 }

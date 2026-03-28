@@ -9,17 +9,56 @@ static volatile int registry_saving = 0;
 
 static RegEntry registry[REG_MAX_KEYS];
 
+static int ensure_default_key(const char* key, const char* value) {
+    if (reg_get(key) != (const char*)0) {
+        return 0;
+    }
+    if (reg_set(key, value) == 0) {
+        return 1;
+    }
+    return -1;
+}
+
 void registry_init(void) {
+    int changed = 0;
+
     for (int i = 0; i < REG_MAX_KEYS; i++) {
         registry[i].used = 0;
     }
-    /* Try to load persisted registry from disk. If that fails, set defaults and save. */
-    if (reg_load() != 0) {
-        /* Set kernel defaults */
-        reg_set("TOASTOS/KERNEL/TIMEZONE", "UTC");
-        reg_set("TOASTOS/KERNEL/TIMEFORMAT", "24");
-        reg_set("TOASTOS/KERNEL/VERSION", "1.1");
-        reg_set("TOASTOS/KERNEL/SETUPSTATUS", "0");
+
+    /* Load persisted registry if available, then enforce required defaults. */
+    (void)reg_load();
+
+    {
+        int r;
+
+        r = ensure_default_key("TOASTOS/KERNEL/TIMEZONE", "UTC");
+        if (r < 0) return;
+        changed += r;
+
+        r = ensure_default_key("TOASTOS/KERNEL/TIMEFORMAT", "24");
+        if (r < 0) return;
+        changed += r;
+
+        r = ensure_default_key("TOASTOS/KERNEL/VERSION", "1.1");
+        if (r < 0) return;
+        changed += r;
+
+        r = ensure_default_key("TOASTOS/KERNEL/SETUPSTATUS", "0");
+        if (r < 0) return;
+        changed += r;
+
+		r = ensure_default_key("TOASTOS/KERNEL/TBOOTCOL", "WK");
+        if (r < 0) return;
+        changed += r;
+
+        /* Boot policy defaults to shell mode and can be expanded later. */
+        r = ensure_default_key("TOASTOS/KERNEL/BOOTMODE", "SHELL");
+        if (r < 0) return;
+        changed += r;
+    }
+
+    if (changed > 0) {
         reg_save();
     }
 }

@@ -1,10 +1,400 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AIDiffSettings">
+    <option name="showAIDiff" value="true" />
+  </component>
+  <component name="AIDiffStorage" id="1">
+    <groups>
+      <group changeListId="72ff097f-55de-4cf0-991e-c47f9843904d" id="3" name="Implement FAT16 directory management with 'mkdir', 'chdir', 'create', 'read', 'delete'" description="Enhance FAT16 filesystem with full directory management, including creation, navigation, listing, and file operations." importance="0.95">
+        <files>
+          <file summary="Adds core logic for FAT16 directory management, including path resolution, directory creation, navigation, and file operations within directories." importance="1.0" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/drivers/fat16.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/fat16.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="61" afterLine2="72" beforeLine1="30" beforeLine2="30" groupId="3" />
+              <range afterLine1="584" afterLine2="1290" beforeLine1="526" beforeLine2="526" groupId="3" />
+            </ranges>
+          </file>
+          <file summary="Updates the FAT16 header to expose new directory management and working directory functions." importance="0.9" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/drivers/fat16.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/fat16.h" afterDir="false" />
+            <ranges>
+              <range afterLine1="88" afterLine2="101" beforeLine1="88" beforeLine2="88" groupId="3" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="7c9e4e84-34cc-4303-934f-6b417d1f33b9" id="2" name="Add 'mem', 'settings', 'tcc', 'ping', 'ret-contents', 'localip' shell commands" description="Introduce new shell commands for memory, settings, C compilation, and network operations." importance="0.9">
+        <files>
+          <file summary="Implements new shell commands: 'mem', 'settings', 'tcc', 'ping', 'ret-contents', and 'localip', enhancing shell functionality." importance="0.9" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/drivers/kio.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/kio.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="14" afterLine2="18" beforeLine1="14" beforeLine2="14" groupId="2" />
+              <range afterLine1="462" afterLine2="463" beforeLine1="456" beforeLine2="457" groupId="2" />
+              <range afterLine1="476" afterLine2="480" beforeLine1="470" beforeLine2="470" groupId="2" />
+              <range afterLine1="495" afterLine2="497" beforeLine1="485" beforeLine2="485" groupId="2" />
+              <range afterLine1="553" afterLine2="560" beforeLine1="541" beforeLine2="541" groupId="2" />
+              <range afterLine1="878" afterLine2="888" beforeLine1="841" beforeLine2="841" groupId="2" />
+              <range afterLine1="944" afterLine2="979" beforeLine1="897" beforeLine2="897" groupId="2" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="2b49eb9c-880e-441b-b1aa-625110584d0f" id="5" name="Refactor kernel initialization and remove deprecated files" description="Streamline kernel initialization and remove obsolete kernel, IDT, and build-related files." importance="0.9">
+        <files>
+          <file summary="Removes the main kernel C file, indicating a significant architectural change or relocation of kernel entry point." importance="1.0" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/kernel.c" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="78" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the LICENSE file, which is a critical change and might indicate a license update or relocation." importance="1.0" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/LICENSE" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="373" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the 'toastIDT.c' file, suggesting a change in how Interrupt Descriptor Table (IDT) is managed." importance="0.9" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/toastIDT.c" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="30" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the IDT assembly file, indicating a change in low-level interrupt handling." importance="0.9" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/idt.asm" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="14" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the kernel assembly file, suggesting a change in the low-level kernel entry or boot process." importance="0.9" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/kernel.asm" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="258" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the GRUB configuration file, implying a change in the bootloader or boot process." importance="0.8" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/iso_root/boot/grub/grub.cfg" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="7" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the IDT header file, reflecting changes in interrupt descriptor table definitions." importance="0.8" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/idt.h" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="23" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the linker script, indicating a change in how the kernel and its components are linked." importance="0.8" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/link.ld" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="21" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the ISR0 handler, indicating a change in how divide-by-zero exceptions are handled." importance="0.8" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/isr0_handler.c" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="8" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the setjmp/longjmp assembly file, possibly indicating a change in context switching or exception handling." importance="0.8" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/setjmp.asm" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="39" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the IDT C file, reflecting changes in interrupt descriptor table management." importance="0.8" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/idt.c" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="25" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the macOS build script, suggesting a consolidation or change in the build system." importance="0.7" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/build-mac.sh" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="37" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the Windows batch build script, indicating a change in the build system for Windows." importance="0.7" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/build-win.bat" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="28" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the WSL build script, suggesting a consolidation or change in the build system." importance="0.7" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/build-wsl.sh" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="106" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes the README.md file, possibly due to relocation or a complete rewrite of documentation." importance="0.6" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/README.md" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="17" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes an initial macOS build script, suggesting a streamlined build process." importance="0.6" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/first-build-mac.sh" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="3" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes a development-related markdown file, likely part of documentation cleanup." importance="0.5" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/development/base.md" beforeDir="false" />
+            <ranges>
+              <range afterLine1="-1" afterLine2="-1" beforeLine1="0" beforeLine2="10" groupId="5" />
+            </ranges>
+          </file>
+          <file summary="Removes a filesystem-related markdown file, likely part of documentation cleanup." importance="0.5" isPending="true">
+            <change beforePath="$PROJECT_DIR$/toastOS/toastFS.md" beforeDir="false" />
+          </file>
+        </files>
+      </group>
+      <group changeListId="b976eabc-8a4b-46d5-9332-ce56987e01a0" id="4" name="Add FAT16 file entry timestamping and directory listing details" description="Integrate time-based stamping for FAT16 file entries and display timestamps in directory listings." importance="0.8">
+        <files>
+          <file summary="Implements 'fat16_encode_time', 'fat16_encode_date', and 'fat16_stamp_entry' for timestamping, and updates directory listing to show timestamps." importance="0.8" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/drivers/fat16.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/fat16.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="7" afterLine2="8" beforeLine1="7" beforeLine2="7" groupId="4" />
+              <range afterLine1="17" afterLine2="47" beforeLine1="16" beforeLine2="16" groupId="4" />
+              <range afterLine1="375" afterLine2="376" beforeLine1="333" beforeLine2="333" groupId="4" />
+              <range afterLine1="532" afterLine2="547" beforeLine1="489" beforeLine2="489" groupId="4" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="7ac12ed4-9212-4e4e-934e-60874d2b1277" id="7" name="Enforce default registry keys with 'ensure_default_key' and save changes" description="Ensure critical registry keys have default values and persist them if modified." importance="0.8">
+        <files>
+          <file summary="Adds 'ensure_default_key' function and uses it to set and save default values for critical kernel registry keys during initialization." importance="0.8" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/drivers/registry.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/registry.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="11" afterLine2="21" beforeLine1="11" beforeLine2="11" groupId="7" />
+              <range afterLine1="22" afterLine2="24" beforeLine1="12" beforeLine2="12" groupId="7" />
+              <range afterLine1="27" afterLine2="61" beforeLine1="15" beforeLine2="22" groupId="7" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="27015bf0-cf2f-4932-a3d9-fad9747ade1b" id="1" name="Add 'printf' function and 'toast_shell_color' for console output" description="Introduce a new 'printf' function and colored shell prompts to enhance console output readability." importance="0.7">
+        <files>
+          <file summary="Adds a new 'printf' function and updates shell prompts to use 'toast_shell_color' for colored output." importance="0.8" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/drivers/kio.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/kio.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="223" afterLine2="228" beforeLine1="219" beforeLine2="219" groupId="1" />
+              <range afterLine1="357" afterLine2="358" beforeLine1="348" beforeLine2="349" groupId="1" />
+              <range afterLine1="376" afterLine2="377" beforeLine1="367" beforeLine2="368" groupId="1" />
+              <range afterLine1="442" afterLine2="443" beforeLine1="436" beforeLine2="437" groupId="1" />
+              <range afterLine1="986" afterLine2="987" beforeLine1="904" beforeLine2="905" groupId="1" />
+              <range afterLine1="1091" afterLine2="1092" beforeLine1="1016" beforeLine2="1017" groupId="1" />
+              <range afterLine1="1157" afterLine2="1158" beforeLine1="1082" beforeLine2="1083" groupId="1" />
+              <range afterLine1="1188" afterLine2="1199" beforeLine1="1113" beforeLine2="1113" groupId="1" />
+              <range afterLine1="1207" afterLine2="1208" beforeLine1="1121" beforeLine2="1122" groupId="1" />
+              <range afterLine1="1222" afterLine2="1223" beforeLine1="1136" beforeLine2="1137" groupId="1" />
+              <range afterLine1="1281" afterLine2="1282" beforeLine1="1195" beforeLine2="1196" groupId="1" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="11686503-2503-497e-9cb4-695317b6a0c7" id="6" name="Update 'setupProgram' with screen clearing and final splash screen" description="Improve the setup program's user experience with screen clearing and a final splash screen." importance="0.7">
+        <files>
+          <file summary="Adds 'clear_screen()' calls and a final splash screen with a delay to 'setupProgram' for a better user experience." importance="0.7" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/services/setup.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/services/setup.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="20" afterLine2="21" beforeLine1="20" beforeLine2="20" groupId="6" />
+              <range afterLine1="37" afterLine2="38" beforeLine1="36" beforeLine2="36" groupId="6" />
+              <range afterLine1="48" afterLine2="49" beforeLine1="46" beforeLine2="46" groupId="6" />
+              <range afterLine1="98" afterLine2="99" beforeLine1="94" beforeLine2="94" groupId="6" />
+              <range afterLine1="101" afterLine2="110" beforeLine1="96" beforeLine2="96" groupId="6" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="bfa556d7-24f1-4dd7-80e1-1fe7ac11405d" id="8" name="Synchronize time settings from registry and parse timezone strings" description="Load and parse timezone and time format settings from the registry for consistent time display." importance="0.7">
+        <files>
+          <file summary="Adds functions to parse timezone strings and synchronize time settings from the registry, updating 'timezone_offset' and 'use_24hr'." importance="0.7" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/drivers/time.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/time.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="4" afterLine2="5" beforeLine1="4" beforeLine2="4" groupId="8" />
+              <range afterLine1="18" afterLine2="78" beforeLine1="17" beforeLine2="17" groupId="8" />
+              <range afterLine1="208" afterLine2="211" beforeLine1="147" beforeLine2="147" groupId="8" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="e02cbbee-46fc-4b99-8053-40a5a19c2163" id="14" name="Update 'editor_open' to prompt for 'toastreg.txt' editing" description="Add a security prompt before editing 'toastreg.txt' to prevent accidental modifications." importance="0.7">
+        <files>
+          <file summary="Modifies 'editor_open' to include a security prompt for editing 'toastreg.txt'." importance="0.7" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/drivers/kio.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/kio.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="856" afterLine2="877" beforeLine1="836" beforeLine2="840" groupId="14" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="5bdfda2e-0f5c-45d6-8480-45ee5da03b4a" id="9" name="Update FreeType library configuration to disable LZW and ZLIB" description="Optimize FreeType library for toastOS by disabling LZW and ZLIB compression support." importance="0.6">
+        <files>
+          <file summary="Disables LZW and ZLIB compression options in FreeType configuration for toastOS." importance="0.6" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftoption.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftoption.h" afterDir="false" />
+            <ranges>
+              <range afterLine1="182" afterLine2="183" beforeLine1="182" beforeLine2="183" groupId="9" />
+              <range afterLine1="197" afterLine2="198" beforeLine1="197" beforeLine2="198" groupId="9" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="7cdb5f29-4289-4c76-ab16-1f4c70dc3ed4" id="10" name="Simplify FreeType standard library includes with 'toast_libc.h'" description="Replace multiple standard library includes in FreeType with a single 'toast_libc.h' for consistency." importance="0.6">
+        <files>
+          <file summary="Replaces multiple standard C library includes with a single 'toast_libc.h' in FreeType's 'ftstdlib.h'." importance="0.6" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftstdlib.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftstdlib.h" afterDir="false" />
+            <ranges>
+              <range afterLine1="4" afterLine2="5" beforeLine1="4" beforeLine2="9" groupId="10" />
+              <range afterLine1="6" afterLine2="8" beforeLine1="10" beforeLine2="15" groupId="10" />
+              <range afterLine1="10" afterLine2="10" beforeLine1="17" beforeLine2="29" groupId="10" />
+              <range afterLine1="14" afterLine2="20" beforeLine1="33" beforeLine2="33" groupId="10" />
+              <range afterLine1="21" afterLine2="22" beforeLine1="34" beforeLine2="36" groupId="10" />
+              <range afterLine1="24" afterLine2="25" beforeLine1="38" beforeLine2="61" groupId="10" />
+              <range afterLine1="33" afterLine2="33" beforeLine1="69" beforeLine2="86" groupId="10" />
+              <range afterLine1="34" afterLine2="35" beforeLine1="87" beforeLine2="89" groupId="10" />
+              <range afterLine1="41" afterLine2="42" beforeLine1="95" beforeLine2="96" groupId="10" />
+              <range afterLine1="49" afterLine2="56" beforeLine1="103" beforeLine2="119" groupId="10" />
+              <range afterLine1="58" afterLine2="59" beforeLine1="121" beforeLine2="131" groupId="10" />
+              <range afterLine1="61" afterLine2="62" beforeLine1="133" beforeLine2="141" groupId="10" />
+              <range afterLine1="67" afterLine2="68" beforeLine1="146" beforeLine2="154" groupId="10" />
+              <range afterLine1="71" afterLine2="73" beforeLine1="157" beforeLine2="171" groupId="10" />
+              <range afterLine1="74" afterLine2="75" beforeLine1="172" beforeLine2="180" groupId="10" />
+              <range afterLine1="78" afterLine2="78" beforeLine1="183" beforeLine2="184" groupId="10" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="93de902b-b4b6-4a89-9998-f17056a142b2" id="15" name="Set 'TOASTOS/KERNEL/TIMEZONE' in registry during setup and timezone command" description="Persist timezone settings to the registry during initial setup and when changed via command." importance="0.6">
+        <files>
+          <file summary="Adds 'reg_set(&quot;TOASTOS/KERNEL/TIMEZONE&quot;, tz)' to persist timezone changes made via the shell command." importance="0.6" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/drivers/kio.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/kio.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="627" afterLine2="628" beforeLine1="608" beforeLine2="608" groupId="15" />
+            </ranges>
+          </file>
+          <file summary="Adds 'reg_set(&quot;TOASTOS/KERNEL/TIMEZONE&quot;, tz)' to persist the timezone setting during the initial setup program." importance="0.6" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/services/setup.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/services/setup.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="84" afterLine2="85" beforeLine1="81" beforeLine2="81" groupId="15" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="21f85e84-a87e-4fda-b47f-2b2175a29204" id="11" name="Remove Mac-specific FreeType component and streamline module loading" description="Remove Mac-specific FreeType component and simplify the list of loaded FreeType modules." importance="0.5">
+        <files>
+          <file summary="Comments out the include for 'ftmac.c' in FreeType's base source, removing Mac-specific code." importance="0.5" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/freetype/src/base/ftbase.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/src/base/ftbase.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="28" afterLine2="29" beforeLine1="28" beforeLine2="29" groupId="11" />
+            </ranges>
+          </file>
+          <file summary="Streamlines the FreeType module configuration to load only essential modules for toastOS." importance="0.5" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftmodule.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftmodule.h" afterDir="false" />
+            <ranges>
+              <range afterLine1="1" afterLine2="3" beforeLine1="1" beforeLine2="10" groupId="11" />
+              <range afterLine1="5" afterLine2="5" beforeLine1="12" beforeLine2="13" groupId="11" />
+              <range afterLine1="6" afterLine2="6" beforeLine1="14" beforeLine2="25" groupId="11" />
+              <range afterLine1="7" afterLine2="8" beforeLine1="26" beforeLine2="26" groupId="11" />
+              <range afterLine1="10" afterLine2="10" beforeLine1="28" beforeLine2="31" groupId="11" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="2bd3fe98-254e-4020-a81c-aaf1e3d4861d" id="16" name="Remove 'Delete' key panic and map to ASCII 127" description="Change 'Delete' key behavior from system panic to ASCII 127 for standard input handling." importance="0.5">
+        <files>
+          <file summary="Removes the panic trigger for 'Delete' key (0x53) and maps it to ASCII 127 in the keyboard scan code table." importance="0.5" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/drivers/kio.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/kio.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="387" afterLine2="388" beforeLine1="378" beforeLine2="382" groupId="16" />
+              <range afterLine1="1070" afterLine2="1071" beforeLine1="988" beforeLine2="996" groupId="16" />
+              <range afterLine1="1731" afterLine2="1732" beforeLine1="1645" beforeLine2="1646" groupId="16" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="8385eb56-06d5-4c9c-a930-5e21f75f0848" id="17" name="Miscellaneous Updates and Fixes" description="Apply minor updates and fixes across various application and service files." importance="0.4">
+        <files>
+          <file summary="Includes 'mmu.h' in 'tapplayer.c', likely to enable memory management functions for the application player." importance="0.4" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/services/tapplayer.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/services/tapplayer.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="13" afterLine2="14" beforeLine1="13" beforeLine2="13" groupId="17" />
+            </ranges>
+          </file>
+          <file summary="Adds a blank line at the end of the 'obama.c' file, a minor formatting change." importance="0.2" isPending="false">
+            <change beforePath="$PROJECT_DIR$/toastOS/apps/obama.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/apps/obama.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="22" afterLine2="23" beforeLine1="22" beforeLine2="22" groupId="17" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="2ba811c4-64d5-4553-aa5a-616da4524344" id="13" name="Add 'security.h' and 'security.c' files" description="Introduce new security-related files for future security features." importance="0.3">
+        <files>
+          <file summary="Adds a new, empty 'security.c' file, likely for future security implementations." importance="0.3" isPending="false">
+            <change afterPath="$PROJECT_DIR$/toastOS/drivers/security.c" afterDir="false" />
+            <ranges>
+              <range afterLine1="0" afterLine2="5" beforeLine1="0" beforeLine2="0" groupId="13" />
+            </ranges>
+          </file>
+          <file summary="Adds a new, empty 'security.h' header file, likely for future security implementations." importance="0.3" isPending="false">
+            <change afterPath="$PROJECT_DIR$/toastOS/drivers/security.h" afterDir="false" />
+            <ranges>
+              <range afterLine1="0" afterLine2="8" beforeLine1="0" beforeLine2="0" groupId="13" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+      <group changeListId="fa602234-5a61-41ca-9f63-d0cec090bf2a" id="12" name="Update IDE configuration for backend code editor settings" description="Adjust IDE backend code editor settings for improved development experience." importance="0.1">
+        <files>
+          <file summary="Updates IDE workspace settings, including backend code editor configurations and run manager entries." importance="0.1" isPending="false">
+            <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+            <ranges>
+              <range afterLine1="5" afterLine2="9" beforeLine1="5" beforeLine2="5" groupId="12" />
+              <range afterLine1="19" afterLine2="32" beforeLine1="15" beforeLine2="18" groupId="12" />
+              <range afterLine1="33" afterLine2="34" beforeLine1="19" beforeLine2="20" groupId="12" />
+              <range afterLine1="35" afterLine2="38" beforeLine1="21" beforeLine2="23" groupId="12" />
+              <range afterLine1="43" afterLine2="49" beforeLine1="28" beforeLine2="28" groupId="12" />
+              <range afterLine1="50" afterLine2="58" beforeLine1="29" beforeLine2="30" groupId="12" />
+              <range afterLine1="59" afterLine2="60" beforeLine1="31" beforeLine2="32" groupId="12" />
+              <range afterLine1="75" afterLine2="77" beforeLine1="47" beforeLine2="48" groupId="12" />
+              <range afterLine1="88" afterLine2="91" beforeLine1="59" beforeLine2="62" groupId="12" />
+              <range afterLine1="92" afterLine2="95" beforeLine1="63" beforeLine2="66" groupId="12" />
+              <range afterLine1="99" afterLine2="125" beforeLine1="70" beforeLine2="95" groupId="12" />
+              <range afterLine1="126" afterLine2="127" beforeLine1="96" beforeLine2="97" groupId="12" />
+              <range afterLine1="134" afterLine2="150" beforeLine1="104" beforeLine2="105" groupId="12" />
+              <range afterLine1="165" afterLine2="169" beforeLine1="120" beforeLine2="120" groupId="12" />
+              <range afterLine1="181" afterLine2="183" beforeLine1="132" beforeLine2="132" groupId="12" />
+            </ranges>
+          </file>
+          <file summary="Adds extensive backend code editor settings, primarily for C++ code inspection severities and formatting rules." importance="0.1" isPending="false">
+            <change beforePath="$PROJECT_DIR$/.idea/editor.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/editor.xml" afterDir="false" />
+            <ranges>
+              <range afterLine1="3" afterLine2="247" beforeLine1="3" beforeLine2="3" groupId="12" />
+            </ranges>
+          </file>
+        </files>
+      </group>
+    </groups>
+  </component>
   <component name="AutoImportSettings">
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
+  <component name="BackendCodeEditorMiscSettings">
+    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="4" type="long" />
+    <option name="/Default/Housekeeping/FeatureSuggestion/FeatureSuggestionManager/DisabledSuggesters/=SwitchToGoToActionSuggester/@EntryIndexedValue" value="true" type="bool" />
+    <option name="/Default/RiderDebugger/RiderRestoreDecompile/RestoreDecompileSetting/@EntryValue" value="false" type="bool" />
+  </component>
+  <component name="CMakePresetLoader">{
+  &quot;useNewFormat&quot;: true
+}</component>
   <component name="CMakeProjectFlavorService">
     <option name="flavorId" value="CMakePlainProjectFlavor" />
+  </component>
+  <component name="CMakeReloadState">
+    <option name="reloaded" value="true" />
+  </component>
+  <component name="CMakeRunConfigurationManager">
+    <generated />
   </component>
   <component name="CMakeSettings">
     <configurations>
@@ -13,23 +403,73 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a67f6585-1e6e-4c9c-abc1-e0c16220116a" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/toastOS/build-wsl.sh" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/build-wsl.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/drivers/font_renderer.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/font_renderer.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/drivers/font_renderer.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/font_renderer.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/toastOS.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/toastOS.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/d-requirements.bat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/fat16.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/fat16.c" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/toastOS/drivers/kio.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/kio.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/drivers/kio.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/kio.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/drivers/time.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/time.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/drivers/time.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/time.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/drivers/toast_libc.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/toast_libc.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/exec" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/fonts/JBMono.ttf" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/toastOS/freetype" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftmodule.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftmodule.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftoption.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftoption.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftstdlib.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftstdlib.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/freetype/src/base/ftbase.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/src/base/ftbase.c" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/toastOS/kernel.bin" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/kernel.bin" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/kernel.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/kernel.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/toastos.img" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/toastos.img" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/toastOS/toastos.iso" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/toastos.iso" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/services/setup.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/services/setup.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/toast.img" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/toastos.img" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/toastos.iso" beforeDir="false" />
+    </list>
+    <list id="2ba811c4-64d5-4553-aa5a-616da4524344" name="Add 'security.h' and 'security.c' files" comment="Introduce new security-related files for future security features.">
+      <change afterPath="$PROJECT_DIR$/toastOS/drivers/security.c" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/toastOS/drivers/security.h" afterDir="false" />
+    </list>
+    <list id="7ac12ed4-9212-4e4e-934e-60874d2b1277" name="Enforce default registry keys with 'ensure_default_key' and save changes" comment="Ensure critical registry keys have default values and persist them if modified.">
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/registry.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/registry.c" afterDir="false" />
+    </list>
+    <list id="72ff097f-55de-4cf0-991e-c47f9843904d" name="Implement FAT16 directory management with 'mkdir', 'chdir', 'create', 'read', 'delete'" comment="Enhance FAT16 filesystem with full directory management, including creation, navigation, listing, and file operations.">
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/fat16.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/fat16.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/fat16.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/fat16.h" afterDir="false" />
+    </list>
+    <list id="8385eb56-06d5-4c9c-a930-5e21f75f0848" name="Miscellaneous Updates and Fixes" comment="Apply minor updates and fixes across various application and service files.">
+      <change beforePath="$PROJECT_DIR$/toastOS/apps/obama.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/apps/obama.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/services/tapplayer.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/services/tapplayer.c" afterDir="false" />
+    </list>
+    <list id="2b49eb9c-880e-441b-b1aa-625110584d0f" name="Refactor kernel initialization and remove deprecated files" comment="Streamline kernel initialization and remove obsolete kernel, IDT, and build-related files.">
+      <change beforePath="$PROJECT_DIR$/toastOS/LICENSE" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/build-mac.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/build-win.bat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/build-wsl.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/development/base.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/first-build-mac.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/idt.asm" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/idt.c" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/idt.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/iso_root/boot/grub/grub.cfg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/isr0_handler.c" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/kernel.asm" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/kernel.c" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/link.ld" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/setjmp.asm" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/toastFS.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/toastIDT.c" beforeDir="false" />
+    </list>
+    <list id="21f85e84-a87e-4fda-b47f-2b2175a29204" name="Remove Mac-specific FreeType component and streamline module loading" comment="Remove Mac-specific FreeType component and simplify the list of loaded FreeType modules.">
+      <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftmodule.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftmodule.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/toastOS/freetype/src/base/ftbase.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/src/base/ftbase.c" afterDir="false" />
+    </list>
+    <list id="93de902b-b4b6-4a89-9998-f17056a142b2" name="Set 'TOASTOS/KERNEL/TIMEZONE' in registry during setup and timezone command" comment="Persist timezone settings to the registry during initial setup and when changed via command.">
+      <change beforePath="$PROJECT_DIR$/toastOS/services/setup.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/services/setup.c" afterDir="false" />
+    </list>
+    <list id="7cdb5f29-4289-4c76-ab16-1f4c70dc3ed4" name="Simplify FreeType standard library includes with 'toast_libc.h'" comment="Replace multiple standard library includes in FreeType with a single 'toast_libc.h' for consistency.">
+      <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftstdlib.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftstdlib.h" afterDir="false" />
+    </list>
+    <list id="bfa556d7-24f1-4dd7-80e1-1fe7ac11405d" name="Synchronize time settings from registry and parse timezone strings" comment="Load and parse timezone and time format settings from the registry for consistent time display.">
+      <change beforePath="$PROJECT_DIR$/toastOS/drivers/time.c" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/drivers/time.c" afterDir="false" />
+    </list>
+    <list id="5bdfda2e-0f5c-45d6-8480-45ee5da03b4a" name="Update FreeType library configuration to disable LZW and ZLIB" comment="Optimize FreeType library for toastOS by disabling LZW and ZLIB compression support.">
+      <change beforePath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftoption.h" beforeDir="false" afterPath="$PROJECT_DIR$/toastOS/freetype/include/freetype/config/ftoption.h" afterDir="false" />
+    </list>
+    <list id="fa602234-5a61-41ca-9f63-d0cec090bf2a" name="Update IDE configuration for backend code editor settings" comment="Adjust IDE backend code editor settings for improved development experience.">
+      <change beforePath="$PROJECT_DIR$/.idea/editor.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/editor.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,11 +484,52 @@
       <entry key="_C:/Users/toastman/Documents/toastOS" value="39Leo4mXXFTWtyPoScU1YyAe4eu" />
     </persistenceIdMap>
   </component>
-  <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="815" />
+  <component name="CopilotUserSelectedModel">
+    <selectedModels>
+      <entry key="chat-panel" value="Claude Sonnet 4.6" />
+      <entry key="agent-panel" value="Claude Sonnet 4.6" />
+    </selectedModels>
   </component>
+  <component name="EmbeddingIndexingInfo">
+    <option name="cachedIndexableFilesCount" value="844" />
+    <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
+  </component>
+  <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Debug" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/toastOS/drivers/editor.c" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/toastOS/drivers/fat16.c" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/toastOS/drivers/kio.c" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/toastOS/drivers/panic.c" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/toastOS/drivers/registry.c" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/toastOS/drivers/security.c" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/toastOS/drivers/security.h" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/toastOS/others/kernel.c" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/toastOS/services/setup.c" root0="FORCE_HIGHLIGHTING" />
+  </component>
+  <component name="LineStatusTrackerManager">
+    <file path="$PROJECT_DIR$/toastOS/services/setup.c">
+      <ranges>
+        <range start1="20" end1="20" start2="20" end2="21" changelist="a67f6585-1e6e-4c9c-abc1-e0c16220116a" />
+        <range start1="36" end1="36" start2="37" end2="38" changelist="a67f6585-1e6e-4c9c-abc1-e0c16220116a" />
+        <range start1="46" end1="46" start2="48" end2="49" changelist="a67f6585-1e6e-4c9c-abc1-e0c16220116a" />
+        <range start1="81" end1="81" start2="84" end2="85" changelist="93de902b-b4b6-4a89-9998-f17056a142b2" />
+        <range start1="94" end1="94" start2="98" end2="99" changelist="a67f6585-1e6e-4c9c-abc1-e0c16220116a" />
+        <range start1="96" end1="96" start2="101" end2="110" changelist="a67f6585-1e6e-4c9c-abc1-e0c16220116a" />
+      </ranges>
+    </file>
+    <file path="$PROJECT_DIR$/toastOS/drivers/fat16.c">
+      <ranges>
+        <range start1="7" end1="7" start2="7" end2="8" changelist="a67f6585-1e6e-4c9c-abc1-e0c16220116a" />
+        <range start1="16" end1="16" start2="17" end2="47" changelist="a67f6585-1e6e-4c9c-abc1-e0c16220116a" />
+        <range start1="30" end1="30" start2="61" end2="72" changelist="72ff097f-55de-4cf0-991e-c47f9843904d" />
+        <range start1="333" end1="333" start2="375" end2="376" changelist="a67f6585-1e6e-4c9c-abc1-e0c16220116a" />
+        <range start1="489" end1="489" start2="532" end2="547" changelist="a67f6585-1e6e-4c9c-abc1-e0c16220116a" />
+        <range start1="526" end1="526" start2="584" end2="1290" changelist="72ff097f-55de-4cf0-991e-c47f9843904d" />
+      </ranges>
+    </file>
   </component>
   <component name="MacroExpansionManager">
     <option name="directoryName" value="P49qgzBi" />
@@ -57,19 +538,29 @@
     <commands />
     <urls />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 0
-}]]></component>
+  <component name="ProjectApplicationVersion">
+    <option name="ide" value="CLion" />
+    <option name="majorVersion" value="2025" />
+    <option name="minorVersion" value="3.2" />
+    <option name="productBranch" value="Classic" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 0
+}</component>
   <component name="ProjectId" id="39Leo4mXXFTWtyPoScU1YyAe4eu" />
-  <component name="ProjectStatusUIService"><![CDATA[{
-  "uiKindId": "Widget"
-}]]></component>
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectStatusUIService">{
+  &quot;uiKindId&quot;: &quot;Widget&quot;
+}</component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "CMake Application.toastOS.executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.MCP Project settings loaded": "true",
     "RunOnceActivity.RadMigrateCodeStyle": "true",
@@ -79,6 +570,9 @@
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.readMode.enableVisualFormatting": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "RunOnceActivity.west.config.association.type.startup.service": "true",
+    "SHELLCHECK.PATH": "I do mind",
+    "Shell Script.Build toastOS.executor": "Debug",
     "cf.first.check.clang-format": "false",
     "cidr.known.project.marker": "true",
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
@@ -91,18 +585,39 @@
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "org.rust.first.attach.projects": "true",
+    "settings.editor.selected.configurable": "preferences.lookFeel",
     "to.speed.mode.migration.done": "true",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
   <component name="RecapSpentCounter">
-    <option name="endsOfQuotaMs" value="1772578806382" />
-    <option name="spentUsd" value="0.004862" />
+    <option name="endsOfQuotaMs" value="1775170810161" />
+    <option name="spentUsd" value="0.03854985" />
   </component>
   <component name="RecapUselessUpdatesCounter">
-    <option name="suspendCountdown" value="9" />
+    <option name="suspendCountdown" value="3" />
   </component>
-  <component name="RunManager">
+  <component name="RunManager" selected="Shell Script.Build toastOS">
+    <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
+      <method v="2">
+        <option name="CLION.EXTERNAL.BUILD" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Build toastOS" type="ShConfigurationType">
+      <option name="SCRIPT_TEXT" value="wsl -d Ubuntu bash -l -c &quot;cd toastos/building &amp;&amp; ./build-wsl.sh&quot;" />
+      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+      <option name="SCRIPT_PATH" value="" />
+      <option name="SCRIPT_OPTIONS" value="" />
+      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
+      <option name="INTERPRETER_PATH" value="powershell.exe" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="EXECUTE_IN_TERMINAL" value="true" />
+      <option name="EXECUTE_SCRIPT_FILE" value="false" />
+      <envs />
+      <method v="2" />
+    </configuration>
     <configuration name="Unnamed" type="ShConfigurationType" nameIsGenerated="true">
       <option name="SCRIPT_TEXT" value="" />
       <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
@@ -118,6 +633,10 @@
       <envs />
       <method v="2" />
     </configuration>
+    <list>
+      <item itemvalue="Shell Script.Unnamed" />
+      <item itemvalue="Shell Script.Build toastOS" />
+    </list>
   </component>
   <component name="RustProjectSettings">
     <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
@@ -130,11 +649,19 @@
       <option name="presentableId" value="Default" />
       <updated>1770479951883</updated>
       <workItem from="1770479953120" duration="1015000" />
+      <workItem from="1773966889382" duration="2679000" />
+      <workItem from="1774036081656" duration="3989000" />
+      <workItem from="1774096235318" duration="3279000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VCPKGProject">
+    <isAutomaticCheckingOnLaunch value="false" />
+    <isAutomaticFoundErrors value="true" />
+    <isAutomaticReloadCMake value="true" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

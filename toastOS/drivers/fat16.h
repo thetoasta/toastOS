@@ -86,4 +86,17 @@ int fat16_delete_file(const char* filename);
 int fat16_list_files(void);
 int fat16_file_exists(const char* filename);
 
+/* Directory support */
+int fat16_mkdir(const char* path);
+int fat16_list_dir(const char* path);
+int fat16_create_file_at(const char* path, const char* content);
+int fat16_read_file_at(const char* path, char* buffer, uint32_t max_size);
+int fat16_delete_at(const char* path);
+int fat16_file_exists_at(const char* path);
+
+/* Working directory */
+int fat16_chdir(const char* path);
+const char* fat16_getcwd(void);
+uint16_t fat16_get_cwd_cluster(void);
+
 #endif /* FAT16_H */

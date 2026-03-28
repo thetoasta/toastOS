@@ -11,6 +11,7 @@ Apps CANNOT self-assign IDs or permissions. The kernel calls register_app().
 #include "../drivers/funcs.h"
 #include "../drivers/panic.h"
 #include "../drivers/fat16.h"
+#include "../drivers/mmu.h"
 #include "../drivers/time.h"
 #include "../drivers/toast_libc.h"
 #include "tapplayer.h"

@@ -12,6 +12,11 @@
 #include "exec.h"
 #include "editor.h"
 #include "tscript.h"
+#include "security.h"
+#include "../services/settings.h"
+#include "mmu.h"
+#include "toastcc.h"
+#include "net.h"
 
 /*
 
@@ -193,20 +198,33 @@ void shutdown() {
 void reboot() {
     kprint("Rebooting...");
     kprint_newline();
-    
-    /* Method 1: Keyboard controller reset */
-    uint8_t good = 0x02;
-    while (good & 0x02)
-        good = inb(0x64);
-    outb(0x64, 0xFE);  /* Pulse CPU reset line */
-    
-    /* Method 2: Triple fault (if keyboard controller fails) */
+
     __asm__ volatile("cli");
-    uint8_t null_idt[6] = {0};
-    __asm__ volatile("lidt %0" : : "m"(null_idt));
-    __asm__ volatile("int $0x03");  /* Triple fault */
-    
-    __asm__ volatile("cli; hlt");
+
+    /* Method 1: Keyboard controller reset (8042 pulse reset line) */
+    uint8_t status;
+    int timeout = 100000;
+    do {
+        status = inb(0x64);
+        timeout--;
+    } while ((status & 0x02) && timeout > 0);
+    outb(0x64, 0xFE);  /* Pulse CPU reset line */
+
+    /* Small delay to let the reset take effect */
+    for (volatile int i = 0; i < 100000; i++) {}
+
+    /* Method 2: ACPI/chipset reset via port 0xCF9 */
+    outb(0xCF9, 0x06);  /* 0x06 = hard reset */
+
+    for (volatile int i = 0; i < 100000; i++) {}
+
+    /* Method 3: 0x0E reset for some chipsets */
+    outb(0xCF9, 0x0E);
+
+    for (volatile int i = 0; i < 100000; i++) {}
+
+    /* If all else fails, halt */
+    __asm__ volatile("hlt");
 }
 
 /* Note: idt_init() has been moved to panic.c - it now handles both 
@@ -215,6 +233,11 @@ void reboot() {
 void kb_init(void) {
     // Enable IRQ0 (timer) and IRQ1 (keyboard)
     write_port(0x21, 0xFC);
+}
+
+void printf(const char *str) {
+    kprint(str);
+    kprint_newline();
 }
 
 void kprint(const char *str) {
@@ -346,7 +369,7 @@ void keyboard_handler_main(void) {
             kprint_newline();
             kprint("App terminated by user.");
             kprint_newline();
-            kprint("toastOS > ");
+            toast_shell_color("toastOS > ", RED);
             input_index = 0;
             return;
         }
@@ -365,7 +388,7 @@ void keyboard_handler_main(void) {
                 if (!editor_is_active()) {
                     clear_screen();
                     kprint_newline();
-                    kprint("toastOS > ");
+                    toast_shell_color("toastOS > ", RED);
                     input_index = 0;
                 }
                 return;
@@ -376,10 +399,7 @@ void keyboard_handler_main(void) {
                 alt_held = 1;
                 return;
             }
-            if ((uint8_t)keycode == 0x53) {
-                l1_panic("Delete initiated quick panic");
-                return;
-            }
+
             /* Up arrow (0x48) — history previous */
             if ((uint8_t)keycode == 0x48) {
                 if (history_count > 0) {
@@ -434,7 +454,7 @@ void keyboard_handler_main(void) {
             if (!editor_is_active()) {
                 clear_screen();
                 kprint_newline();
-                kprint("toastOS > ");
+                toast_shell_color("toastOS > ", RED);
                 input_index = 0;
             }
             return;
@@ -454,7 +474,7 @@ void keyboard_handler_main(void) {
                 kprint("toastOS v1.1 - Command Reference");
                 kprint_newline();
                 kprint_newline();
-                kprint("  System:    help, clear, info, shutdown, reboot");
+                kprint("  System:    help, clear, info, shutdown, reboot, settings");
                 kprint_newline();
                 kprint("  Display:   cursor-on, cursor-off, bg");
                 kprint_newline();
@@ -467,6 +487,10 @@ void keyboard_handler_main(void) {
                 kprint("  Editor:    edit <file>");
                 kprint_newline();
                 kprint("  IDE:       toast app engine <file.tsc>");
+                kprint_newline();
+                kprint("  C Code:    tcc <file.c>");
+                kprint_newline();
+                kprint("  Network:   ping <ip>, ret-contents <ip> <path>, localip");
                 kprint_newline();
                 kprint("  Registry:  reg list, reg get, reg set, reg del");
                 kprint_newline();
@@ -483,6 +507,8 @@ void keyboard_handler_main(void) {
             }
             else if (strcmp(input_buffer, "clear") == 0) {
                 clear_screen();
+            } else if (strcmp(input_buffer, "settings") == 0) {
+                settings();
             }
             else if (strcmp(input_buffer, "info") == 0) {
                 kprint("toastOS v1.1 by thetoasta (2025)");
@@ -538,6 +564,13 @@ void keyboard_handler_main(void) {
                 kprint("m ");
                 print_num(secs % 60);
                 kprint("s");
+            }
+            else if (strcmp(input_buffer, "mem") == 0) {
+                kprint("heap used: ");
+                print_num(mmu_used() / 1024);
+                kprint(" KB  free: ");
+                print_num(mmu_free() / 1024);
+                kprint(" KB");
             }
             else if (strcmp(input_buffer, "apps") == 0) {
                 kprint("Available apps:");
@@ -606,6 +639,7 @@ void keyboard_handler_main(void) {
                     }
                     if (val <= 12) {
                         set_timezone(sign * val);
+                        reg_set("TOASTOS/KERNEL/TIMEZONE", tz);
                         kprint("Timezone set to UTC");
                         kprint(tz);
                     } else {
@@ -834,10 +868,18 @@ void keyboard_handler_main(void) {
             /* ===== EDITOR ===== */
             else if (strncmp(input_buffer, "edit ", 5) == 0) {
                 char* fname = input_buffer + 5;
-                editor_open(fname);
-                /* editor_handle_key() takes over; shell redraws on exit */
-                input_index = 0;
-                return;
+                // toastSecurity prompt if the user actually wants to edit protected file (registry!)
+                showFilePrompt("toastreg.txt", "this file contains core data for the OS.");
+            }
+
+            /* ===== TOAST C COMPILER ===== */
+            else if (strncmp(input_buffer, "tcc ", 4) == 0) {
+                char* fname = input_buffer + 4;
+                if (fname[0] == '\0') {
+                    kprint("Usage: tcc <file.c>");
+                } else {
+                    tcc_run_file(fname);
+                }
             }
 
             /* ===== TOAST APP ENGINE ===== */
@@ -895,6 +937,41 @@ void keyboard_handler_main(void) {
                 }
             }
 
+            /* ===== NETWORK COMMANDS ===== */
+            else if (strncmp(input_buffer, "ping ", 5) == 0) {
+                char* ip = input_buffer + 5;
+                if (ip[0] == '\0') {
+                    kprint("Usage: ping <ip>");
+                } else {
+                    if (net_init() == 0) {
+                        net_ping(ip);
+                    }
+                }
+            }
+            else if (strncmp(input_buffer, "ret-contents ", 13) == 0) {
+                /* ret-contents <ip> <path>  OR  ret-contents <ip> (defaults to /) */
+                char* args = input_buffer + 13;
+                if (args[0] == '\0') {
+                    kprint("Usage: ret-contents <ip> [path]");
+                } else {
+                    char* space = args;
+                    while (*space && *space != ' ') space++;
+                    const char* path = "/";
+                    if (*space == ' ') {
+                        *space = '\0';
+                        path = space + 1;
+                    }
+                    if (net_init() == 0) {
+                        net_http_get(args, path);
+                    }
+                }
+            }
+            else if (strcmp(input_buffer, "localip") == 0) {
+                if (net_init() == 0) {
+                    net_print_local_ip();
+                }
+            }
+
             /* ===== UNKNOWN COMMAND ===== */
             else if (strcmp(input_buffer, "") != 0) {
                 kprint("Unknown command. Type 'help' for commands.");
@@ -902,7 +979,7 @@ void keyboard_handler_main(void) {
 
             input_index = 0;
             kprint_newline();
-            kprint("toastOS > ");
+            toast_shell_color("toastOS > ", RED);
             return;
         }
 
@@ -986,14 +1063,7 @@ char* rec_input(void) {
             }
             
             // Handle E0-prefixed keys
-            if (got_e0) {
-                got_e0 = 0;
-                if ((uint8_t)keycode == 0x53) {
-                    write_port(0x21, saved_irq_mask);   /* restore IRQ mask */
-                    l1_panic("Delete initiated quick panic");
-                }
-                continue;
-            }
+
             
             if (keycode == ENTER_KEY_CODE) {
                 temp_buffer[temp_index] = '\0';
@@ -1014,7 +1084,7 @@ char* rec_input(void) {
                 kprint_newline();
                 kprint("App terminated by user.");
                 kprint_newline();
-                kprint("toastOS > ");
+                toast_shell_color("toastOS > ", RED);
                 temp_buffer[0] = '\0';
                 write_port(0x21, saved_irq_mask);       /* restore IRQ mask */
                 return temp_buffer;
@@ -1080,7 +1150,7 @@ static void restore_terminal(int term_idx) {
         }
         kprint_newline();
         kprint_newline();
-        kprint("toastOS > ");
+        toast_shell_color("toastOS > ", RED);
         term->active = 1;
     }
 }
@@ -1111,6 +1181,17 @@ void init_shell(void) {
     
     clear_screen();
     update_top_bar();
+
+    toast_shell_color("   v   _                _    ___  ___ ", LIGHT_CYAN);
+    kprint_newline();
+    toast_shell_color("   1  | |_ ___  __ _ __| |_ / _ \\/ __|", LIGHT_CYAN);
+    kprint_newline();
+    toast_shell_color("   .  |  _/ _ \\/ _` (_-<  _| (_) \\__ \\", LIGHT_CYAN);
+    kprint_newline();
+    toast_shell_color("   1  \\__\\___/\\__,_/__/\\__|\\___/|___/", LIGHT_CYAN);
+    kprint_newline();
+    kprint_newline();
+
     const char* uname = reg_get("TOASTOS/KERNEL/NAME");
     if (uname) {
         kprint("Welcome back, ");
@@ -1119,7 +1200,7 @@ void init_shell(void) {
         kprint("Welcome to toastOS");
     }
     kprint_newline();
-    kprint("toastOS > ");
+    toast_shell_color("toastOS > ", RED);
     enable_cursor(0, 15);
     kb_init();
 }
@@ -1134,7 +1215,7 @@ void panic_init(void) {
         kprint("Welcome to toastOS");
     }
     kprint_newline();
-    kprint("toastOS > ");
+    toast_shell_color("toastOS > ", RED);
     enable_cursor(0, 15);
     kb_init();
 }
@@ -1193,7 +1274,7 @@ void disk_operations_terminal(void) {
                 kprint("Welcome to toastOS");
             }
             kprint_newline();
-            kprint("toastOS > ");
+            toast_shell_color("toastOS > ", RED);
             break;
         }
         else if (strcmp(cmd, "write") == 0) {
@@ -1572,6 +1653,7 @@ static uint8_t parse_hex_nibble(const char* s) {
     return 0;
 }
 
+/* the MASTER keyboard map for everywhere */
 unsigned char keyboard_map_shifted[128] = {
     0,  27, '!', '@', '#', '$', '%', '^', '&', '*',    /* 9 */
     '(', ')', '_', '+', '\b',    /* Backspace */
@@ -1643,7 +1725,7 @@ unsigned char keyboard_map[128] = {
     0, /* Down Arrow */
     0, /* Page Down */
     0, /* Insert */
-    0, /* Delete */
+    127, /* Delete */
     0, 0, 0,
     0, /* F11 */
     0, /* F12 */

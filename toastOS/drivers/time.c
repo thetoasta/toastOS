@@ -2,6 +2,7 @@
 #include "registry.h"
 #include "kio.h"
 #include "stdint.h"
+#include "string.h"
 
 #define ALL_MEMORY 0x100000 // Placeholder for now
 #define PIT_FREQ 1193180
@@ -14,6 +15,66 @@ extern volatile int registry_saving;
 
 static int timezone_offset = 0;  // Hours offset from UTC
 static int use_24hr = 1;         // 1 = 24hr, 0 = 12hr
+
+static int parse_numeric_tz(const char* s, int* out_offset) {
+    int sign = 1;
+    int i = 0;
+    int value = 0;
+
+    if (!s || !out_offset || s[0] == '\0') return 0;
+
+    if (s[0] == '+') {
+        i = 1;
+    } else if (s[0] == '-') {
+        sign = -1;
+        i = 1;
+    }
+
+    if (s[i] == '\0') return 0;
+
+    while (s[i]) {
+        if (s[i] < '0' || s[i] > '9') return 0;
+        value = (value * 10) + (s[i] - '0');
+        i++;
+    }
+
+    value *= sign;
+    if (value < -12 || value > 12) return 0;
+
+    *out_offset = value;
+    return 1;
+}
+
+static int parse_registry_timezone(const char* tz, int* out_offset) {
+    if (!tz || !out_offset) return 0;
+
+    if (strcmp(tz, "EST") == 0) { *out_offset = -5; return 1; }
+    if (strcmp(tz, "CST") == 0) { *out_offset = -6; return 1; }
+    if (strcmp(tz, "MST") == 0) { *out_offset = -7; return 1; }
+    if (strcmp(tz, "PST") == 0) { *out_offset = -8; return 1; }
+    if (strcmp(tz, "UTC") == 0) { *out_offset = 0;  return 1; }
+    if (strcmp(tz, "GMT") == 0) { *out_offset = 0;  return 1; }
+
+    return parse_numeric_tz(tz, out_offset);
+}
+
+static void sync_time_settings_from_registry(void) {
+    int reg_offset = 0;
+    const char* tz = reg_get("TOASTOS/KERNEL/TIMEZONE");
+    const char* fmt = reg_get("TOASTOS/KERNEL/TIMEFORMAT");
+
+    if (parse_registry_timezone(tz, &reg_offset)) {
+        timezone_offset = reg_offset;
+    }
+
+    if (fmt) {
+        if (strcmp(fmt, "12") == 0) {
+            use_24hr = 0;
+        } else if (strcmp(fmt, "24") == 0) {
+            use_24hr = 1;
+        }
+    }
+}
 
 void set_timezone(int offset_hours) {
     timezone_offset = offset_hours;
@@ -145,6 +206,9 @@ void write_num_at(int x, int y, uint32_t val, uint8_t color) {
 }
 
 void update_top_bar() {
+    /* Keep runtime time settings in sync with persisted registry values. */
+    sync_time_settings_from_registry();
+
     // Draw background bar
     for (int i = 0; i < 80; i++) {
         write_char_at(i, 0, ' ', ((BLUE << 4) | WHITE));
