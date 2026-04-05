@@ -104,6 +104,24 @@ void *krealloc(void *ptr, uint32_t new_size) {
     return fresh;
 }
 
+/* Allocate with a specific alignment (must be power of 2) */
+void *kmalloc_aligned(uint32_t size, uint32_t alignment) {
+    if (size == 0 || alignment == 0) return (void *)0;
+
+    /* Over-allocate to guarantee alignment */
+    uint32_t total = size + alignment + sizeof(uint32_t);
+    void *raw = kmalloc(total);
+    if (!raw) return (void *)0;
+
+    /* Align the usable address */
+    uint32_t addr = ((uint32_t)raw + sizeof(uint32_t) + alignment - 1) & ~(alignment - 1);
+
+    /* Store the original pointer just before the aligned address */
+    *((uint32_t *)addr - 1) = (uint32_t)raw;
+
+    return (void *)addr;
+}
+
 uint32_t mmu_used(void) {
     uint32_t total = 0;
     block_t *cur = head;

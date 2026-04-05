@@ -3,6 +3,7 @@
 #include "kio.h"
 #include "stdint.h"
 #include "string.h"
+#include "panic.h"
 
 #define ALL_MEMORY 0x100000 // Placeholder for now
 #define PIT_FREQ 1193180

@@ -12,6 +12,7 @@ Teaches the user on how to use, sets up timezone and time format, and also other
 #include "../drivers/time.h"
 #include "../drivers/toast_libc.h"
 #include "../drivers/registry.h"
+#include "../drivers/user.h"
 #include "setup.h"
 
 void setupProgram();
@@ -36,6 +37,13 @@ void setupProgram() {
     kprint("!");
     kprint_newline();
     clear_screen();
+    kprint("We need to set a password to keep your data safe. You cannot reset this without losing data.");
+    kprint_newline();
+    kprint("Enter a password to protect your data (leaving blank will still require you to click enter.)");
+    kprint_newline();
+    kprint("> ");
+    char* password = rec_input();
+    set_password(password);
     kprint("Let's get you set up. At the top of the screen, you see a menu bar.");
     kprint_newline();
     kprint("That menu bar contains the time. We need to make it your timezone and options.");

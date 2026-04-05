@@ -15,6 +15,7 @@
 #include "security.h"
 #include "../services/settings.h"
 #include "mmu.h"
+#include "user.h"
 #include "toastcc.h"
 #include "net.h"
 
@@ -225,6 +226,7 @@ void reboot() {
 
     /* If all else fails, halt */
     __asm__ volatile("hlt");
+    __asm__ volatile("hlt");
 }
 
 /* Note: idt_init() has been moved to panic.c - it now handles both 
@@ -235,7 +237,7 @@ void kb_init(void) {
     write_port(0x21, 0xFC);
 }
 
-void printf(const char *str) {
+void kprintln(const char *str) {
     kprint(str);
     kprint_newline();
 }
@@ -492,7 +494,9 @@ void keyboard_handler_main(void) {
                 kprint_newline();
                 kprint("  C Code:    tcc <file.c>");
                 kprint_newline();
-                kprint("  Network:   ping <ip>, ret-contents <ip> <path>, localip");
+                kprint("  Network:   ping <ip|host>, ret-contents <ip|host> <path>, localip");
+                kprint_newline();
+                kprint("  Browser:   browse <url>");
                 kprint_newline();
                 kprint("  Registry:  reg list, reg get, reg set, reg del");
                 kprint_newline();
@@ -516,6 +520,49 @@ void keyboard_handler_main(void) {
                 kprint("toastOS v1.1 by thetoasta (2025)");
                 kprint_newline();
                 kprint("github.com/thetoasta/toastOS");
+                kprint_newline();
+                kprint_newline();
+
+                /* ---- Storage ---- */
+                kprint("=== Storage ===");
+                kprint_newline();
+                disk_info_t dinfo;
+                if (ata_get_disk_info(&dinfo) == 0) {
+                    kprint("Disk Name : ");
+                    kprint(dinfo.model);
+                    kprint_newline();
+                    kprint("Disk Type : ");
+                    kprint(dinfo.type);
+                    kprint_newline();
+                    kprint("Capacity  : ");
+                    print_num(dinfo.size_mb);
+                    kprint(" MB");
+                    kprint_newline();
+                } else {
+                    kprint("No ATA disk detected");
+                    kprint_newline();
+                }
+
+                kprint_newline();
+
+                /* ---- Network ---- */
+                kprint("=== Network ===");
+                kprint_newline();
+                net_info_t ninfo;
+                net_get_info(&ninfo);
+                if (ninfo.link_up) {
+                    kprint("Interface : ");
+                    kprint(ninfo.connection_type);
+                    kprint_newline();
+                    kprint("NIC       : ");
+                    kprint(ninfo.nic_name);
+                    kprint_newline();
+                    kprint("Status    : Connected");
+                    kprint_newline();
+                } else {
+                    kprint("Status    : Not connected");
+                    kprint_newline();
+                }
             }
             else if (strcmp(input_buffer, "shutdown") == 0) {
                 shutdown();
@@ -890,7 +937,13 @@ void keyboard_handler_main(void) {
             else if (strncmp(input_buffer, "edit ", 5) == 0) {
                 char* fname = input_buffer + 5;
                 // toastSecurity prompt if the user actually wants to edit protected file (registry!)
-                showFilePrompt("toastreg.txt", "this file contains core data for the OS.");
+                if (strcmp(fname, "toastreg.txt") == 0) {
+                    showFilePrompt("toastreg.txt", "this file contains core data for the OS.");
+                } else {
+                    editor_open(fname);
+                    input_index = 0;
+                    return;
+                }
             }
 
             /* ===== TOAST C COMPILER ===== */
@@ -931,7 +984,15 @@ void keyboard_handler_main(void) {
                     kprint("[exec] Launch cancelled by user.");
                 }
             }
-
+            else if (strncmp(input_buffer, "setpword ", 9) == 0) {
+                if (reg_get("TOASTOS/SECURITY/PASSWORD") != NULL) {
+                    kprint("Password already set. This command can only be used once.");
+                    return;
+                }
+                char* password = input_buffer + 9;
+                set_password(password);
+                kprint("password set");
+            }
             /* ===== APP LAUNCHER ===== */
             else if (strncmp(input_buffer, "run ", 4) == 0) {
                 char* app_name = input_buffer + 4;
@@ -967,7 +1028,7 @@ void keyboard_handler_main(void) {
             else if (strncmp(input_buffer, "ping ", 5) == 0) {
                 char* ip = input_buffer + 5;
                 if (ip[0] == '\0') {
-                    kprint("Usage: ping <ip>");
+                    kprint("Usage: ping <ip or hostname>");
                 } else {
                     if (net_init() == 0) {
                         net_ping(ip);
@@ -975,10 +1036,10 @@ void keyboard_handler_main(void) {
                 }
             }
             else if (strncmp(input_buffer, "ret-contents ", 13) == 0) {
-                /* ret-contents <ip> <path>  OR  ret-contents <ip> (defaults to /) */
+                /* ret-contents <ip|host> <path>  OR  ret-contents <ip|host> (defaults to /) */
                 char* args = input_buffer + 13;
                 if (args[0] == '\0') {
-                    kprint("Usage: ret-contents <ip> [path]");
+                    kprint("Usage: ret-contents <ip or hostname> [path]");
                 } else {
                     char* space = args;
                     while (*space && *space != ' ') space++;
@@ -995,6 +1056,17 @@ void keyboard_handler_main(void) {
             else if (strcmp(input_buffer, "localip") == 0) {
                 if (net_init() == 0) {
                     net_print_local_ip();
+                }
+            }
+            else if (strncmp(input_buffer, "browse ", 7) == 0) {
+                char* burl = input_buffer + 7;
+                if (burl[0] == '\0') {
+                    kprint("Usage: browse <url>");
+                    kprint_newline();
+                } else {
+                    if (net_init() == 0) {
+                        net_browse(burl);
+                    }
                 }
             }
 

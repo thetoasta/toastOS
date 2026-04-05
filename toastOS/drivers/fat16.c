@@ -1288,3 +1288,87 @@ int fat16_chdir(const char* path) {
     fat16_cwd_path[i] = '\0';
     return 0;
 }
+
+/* ---- fat16_enumerate_dir — fill array of entries for POSIX dirent ------ */
+
+typedef struct {
+    fat16_enum_entry_t *out;
+    int max;
+    int count;
+} enum_ctx_t;
+
+static int enum_entry_cb(fat16_dir_entry_t* e, uint32_t lba, int idx, void* ctx) {
+    enum_ctx_t *ec = (enum_ctx_t *)ctx;
+    (void)lba; (void)idx;
+    if (ec->count >= ec->max) return 1; /* stop */
+
+    /* Skip . and .. entries for cleaner output */
+    if (e->filename[0] == '.') {
+        if (e->filename[1] == ' ' || e->filename[1] == '.') return 0;
+    }
+
+    fat16_enum_entry_t *out = &ec->out[ec->count];
+
+    /* Build lowercase 8.3 name */
+    int pos = 0;
+    for (int i = 0; i < 8; i++) {
+        if (e->filename[i] != ' ') {
+            char c = e->filename[i];
+            if (c >= 'A' && c <= 'Z') c += 32;
+            out->name[pos++] = c;
+        }
+    }
+    if (e->extension[0] != ' ') {
+        out->name[pos++] = '.';
+        for (int i = 0; i < 3; i++) {
+            if (e->extension[i] != ' ') {
+                char c = e->extension[i];
+                if (c >= 'A' && c <= 'Z') c += 32;
+                out->name[pos++] = c;
+            }
+        }
+    }
+    out->name[pos] = '\0';
+    out->is_dir    = (e->attributes & FAT16_ATTR_DIRECTORY) ? 1 : 0;
+    out->file_size = e->file_size;
+    ec->count++;
+    return 0;
+}
+
+int fat16_enumerate_dir(const char *path, fat16_enum_entry_t *out, int max_entries) {
+    if (!fat16_initialized || !out || max_entries <= 0) return -1;
+
+    uint16_t dir_cluster;
+
+    if (!path || path[0] == '\0' || (path[0] == '/' && path[1] == '\0')) {
+        dir_cluster = FAT16_ROOT_CLUSTER;
+    } else {
+        static char clean[256];
+        int clen = 0;
+        while (path[clen] && clen < 255) { clean[clen] = path[clen]; clen++; }
+        clean[clen] = '\0';
+        while (clen > 1 && clean[clen - 1] == '/') { clen--; clean[clen] = '\0'; }
+
+        if (clean[0] == '/' && clean[1] == '\0') {
+            dir_cluster = FAT16_ROOT_CLUSTER;
+        } else {
+            uint16_t parent;
+            const char *leaf;
+            if (resolve_path(clean, &parent, &leaf) < 0) return -1;
+            find_ctx_t fc;
+            fc.name = leaf;
+            fc.found = 0;
+            iterate_dir(parent, find_entry_cb, &fc);
+            if (!fc.found || !(fc.result.attributes & FAT16_ATTR_DIRECTORY))
+                return -1;
+            dir_cluster = fc.result.first_cluster;
+        }
+    }
+
+    enum_ctx_t ec;
+    ec.out   = out;
+    ec.max   = max_entries;
+    ec.count = 0;
+    iterate_dir(dir_cluster, enum_entry_cb, &ec);
+    return ec.count;
+}

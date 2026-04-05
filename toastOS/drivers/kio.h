@@ -62,6 +62,7 @@ extern char *vidptr;
 /* function declarations */
 void kb_init(void);
 void kprint(const char *str);
+void kprintln(const char *str);
 void kprint_newline(void);
 void clear_screen(void);
 void clear_screen_color(uint8_t bg_color);

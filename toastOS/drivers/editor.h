@@ -1,6 +1,7 @@
 /*
  * toastOS Built-in Text Editor
  * A simple nano-style editor with FAT16 read/write support.
+ * Now with rich text formatting for document writing!
  */
 #ifndef EDITOR_H
 #define EDITOR_H
@@ -11,11 +12,18 @@
 #define EDITOR_MAX_LINELEN  160
 #define EDITOR_MAX_FILESIZE 16384
 
+/* Rich text formatting modes */
+#define EDITOR_MODE_PLAIN  0   /* Plain text editor (code, etc.) */
+#define EDITOR_MODE_DOC    1   /* Document mode with rich text rendering */
+
 /* Call once after all drivers are ready */
 void editor_init(void);
 
 /* Open a file by FAT16 filename. Creates a new file if not found. */
 void editor_open(const char *filename);
+
+/* Open in document mode with rich text formatting */
+void editor_open_doc(const char *filename);
 
 /*
  * Feed one raw keyboard event to the editor.
@@ -39,5 +47,23 @@ int editor_run_requested(void);
 
 /* Returns the current filename being edited */
 const char *editor_get_filename(void);
+
+/*
+ * Rich Text Formatting Syntax (for Document Mode):
+ *
+ *   **text**     Bold text
+ *   *text*       Italic text
+ *   ~~text~~     Strikethrough
+ *   ^text        Center this line (^ at start)
+ *   {red}text    Color text (colors: red, green, blue, cyan, yellow, magenta, white, grey)
+ *   {/}          End color
+ *
+ * Toggle modes:
+ *   Ctrl+D       Toggle document/plain mode
+ *   Ctrl+1       Insert bold markers
+ *   Ctrl+2       Insert italic markers
+ *   Ctrl+3       Insert strikethrough markers
+ *   Ctrl+4       Insert center marker
+ */
 
 #endif /* EDITOR_H */

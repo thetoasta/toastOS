@@ -35,11 +35,22 @@
 /* Sector size */
 #define ATA_SECTOR_SIZE          512
 
+/* Disk information returned by ata_get_disk_info() */
+typedef struct {
+    char     model[41];      /* Model string (40 chars + NUL) */
+    char     type[16];       /* "ATA" or "Unknown" */
+    uint32_t size_mb;        /* Total size in MB */
+    uint32_t total_sectors;  /* LBA28 sector count */
+} disk_info_t;
+
 /* Function declarations */
 int ata_init(void);
 int ata_read_sectors(uint32_t lba, uint8_t sector_count, void* buffer);
 int ata_write_sectors(uint32_t lba, uint8_t sector_count, const void* buffer);
 int ata_identify(void);
 int ata_erase_sectors(uint32_t start_lba, uint32_t count);
+
+/* Query disk model, type and capacity.  Returns 0 on success, -1 if no drive. */
+int ata_get_disk_info(disk_info_t *info);
 
 #endif /* ATA_H */

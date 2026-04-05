@@ -1,16 +1,11 @@
 /*
- * FreeType Font Renderer for toastOS
+ * Font Renderer stub for toastOS (FreeType removed)
  * Copyright (C) 2025 thetoasta
  * This file is licensed under the Mozilla Public License, v. 2.0.
  */
 
 #ifndef FONT_RENDERER_H
 #define FONT_RENDERER_H
-
-#include <ft2build.h>
-#include <freetype/freetype.h>
-#include <freetype/ftglyph.h>
-#include <freetype/ftbitmap.h>
 
 /* Initialise FreeType – call once at boot */
 int  toast_ft_init(void);

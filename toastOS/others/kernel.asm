@@ -16,6 +16,8 @@ section .text
 	global read_port
 	global write_port
 	global load_idt
+	global syscall_isr
+	global thread_switch_asm
 
 	; ISR stubs for CPU exceptions
 	global isr0
@@ -43,6 +45,7 @@ section .text
 	extern keyboard_handler_main
     extern timer_handler
 	extern isr_handler  ; Common C handler for exceptions
+	extern syscall_dispatch ; Syscall C handler
 
 	read_port:
 		mov edx, [esp + 4]
@@ -233,6 +236,46 @@ isr19:
     push dword 0
     push dword 19
     jmp isr_common_stub
+
+; ---- INT 0x80: Syscall handler ----
+; Linux i386 convention: EAX=syscall#, EBX=arg1, ECX=arg2, EDX=arg3
+; Return value in EAX
+syscall_isr:
+    cli
+    pusha                    ; push edi,esi,ebp,esp,ebx,edx,ecx,eax
+    push esp                 ; pass pointer to pushed regs as arg
+    call syscall_dispatch
+    add esp, 4               ; clean up arg
+    popa                     ; restore (modified EAX = return value)
+    sti
+    iretd
+
+; ---- Thread context switch ----
+; void thread_switch_asm(uint32_t *old_esp, uint32_t new_esp)
+; Saves callee-saved regs on old stack, switches to new stack, restores regs
+thread_switch_asm:
+    mov eax, [esp+4]     ; old_esp pointer
+    mov edx, [esp+8]     ; new_esp value
+
+    ; Save callee-saved registers on current stack
+    push ebp
+    push ebx
+    push esi
+    push edi
+
+    ; Save current ESP into *old_esp
+    mov [eax], esp
+
+    ; Switch to new stack
+    mov esp, edx
+
+    ; Restore callee-saved registers from new stack
+    pop edi
+    pop esi
+    pop ebx
+    pop ebp
+
+    ret                  ; returns to the EIP that was on the new stack
 
 	start:
 		cli 				;block interrupts

@@ -3,7 +3,7 @@
 
 #define REG_MAX_KEYS     64
 #define REG_KEY_LEN      48
-#define REG_VALUE_LEN    64
+#define REG_VALUE_LEN    80
 
 /* Registry entry */
 typedef struct {

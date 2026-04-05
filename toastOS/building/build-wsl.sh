@@ -16,7 +16,7 @@ LD=x86_64-elf-ld
 ASM=nasm
 QEMU=qemu-system-i386
 
-CFLAGS="-m32 -ffreestanding -fno-stack-protector -fno-pic -I . -I drivers -I freetype/include"
+CFLAGS="-m32 -ffreestanding -fno-stack-protector -fno-pic -mno-sse -mno-sse2 -mno-mmx -I . -I drivers -I freetype/include"
 FTCFLAGS="$CFLAGS -DFT2_BUILD_LIBRARY -DFT_CONFIG_OPTION_NO_ASSEMBLER"
 LDFLAGS="-m elf_i386 -T building/link.ld"
 
@@ -268,7 +268,6 @@ qemu-system-i386.exe \
   -m 8M \
   -serial stdio \
     -drive file=toastos.img,format=raw,if=ide \
-    -no-reboot \
   -netdev user,id=n0 \
     -device rtl8139,netdev=n0
 

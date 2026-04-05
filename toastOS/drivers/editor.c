@@ -75,9 +75,44 @@ static int  ed_scroll;   /* first visible line index */
 static int  ed_modified; /* 0=clean, 1=dirty, -1=pending force-quit confirm */
 static int  ed_active;
 static int  ed_ide_mode; /* 1 = App Engine IDE mode (^B build, ^R run) */
+static int  ed_doc_mode; /* 1 = Document mode with rich text rendering */
 static int  ed_run_req;  /* set to 1 when user presses ^R */
 static char ed_filename[16];
 static char ed_msg[81];
+
+/* ------------------------------------------------------------------ */
+/* VGA Colors for rich text                                             */
+/* ------------------------------------------------------------------ */
+#define COL_BLACK     0x00
+#define COL_BLUE      0x01
+#define COL_GREEN     0x02
+#define COL_CYAN      0x03
+#define COL_RED       0x04
+#define COL_MAGENTA   0x05
+#define COL_BROWN     0x06
+#define COL_GREY      0x07
+#define COL_DARKGREY  0x08
+#define COL_LBLUE     0x09
+#define COL_LGREEN    0x0A
+#define COL_LCYAN     0x0B
+#define COL_LRED      0x0C
+#define COL_LMAGENTA  0x0D
+#define COL_YELLOW    0x0E
+#define COL_WHITE     0x0F
+
+/* Parse color name and return VGA color code */
+static uint8_t parse_color_name(const char *name) {
+    if (name[0] == 'r' && name[1] == 'e' && name[2] == 'd') return COL_LRED;
+    if (name[0] == 'g' && name[1] == 'r' && name[2] == 'e' && name[3] == 'e' && name[4] == 'n') return COL_LGREEN;
+    if (name[0] == 'b' && name[1] == 'l' && name[2] == 'u' && name[3] == 'e') return COL_LBLUE;
+    if (name[0] == 'c' && name[1] == 'y' && name[2] == 'a' && name[3] == 'n') return COL_LCYAN;
+    if (name[0] == 'y' && name[1] == 'e' && name[2] == 'l' && name[3] == 'l') return COL_YELLOW;
+    if (name[0] == 'm' && name[1] == 'a' && name[2] == 'g') return COL_LMAGENTA;
+    if (name[0] == 'w' && name[1] == 'h' && name[2] == 'i') return COL_WHITE;
+    if (name[0] == 'g' && name[1] == 'r' && name[2] == 'e' && name[3] == 'y') return COL_GREY;
+    if (name[0] == 'o' && name[1] == 'r' && name[2] == 'a') return COL_BROWN;  /* orange/brown */
+    return COL_WHITE;
+}
 
 /* ------------------------------------------------------------------ */
 /* Rendering                                                            */
@@ -86,7 +121,8 @@ static char ed_msg[81];
 extern void update_cursor(int x, int y);   /* defined in kio.c */
 
 static void render_line(int screen_row, int buf_line) {
-    uint8_t attr = (buf_line == ed_cr) ? ATTR_CURLINE : ATTR_NORMAL;
+    uint8_t base_attr = (buf_line == ed_cr) ? ATTR_CURLINE : ATTR_NORMAL;
+    
     /* Draw line number gutter */
     if (buf_line >= 0 && buf_line < ed_nlines) {
         char num[4];
@@ -99,15 +135,106 @@ static void render_line(int screen_row, int buf_line) {
         for (int g = 0; g < 3; g++)
             vga_put(g, screen_row, num[g], gutter_attr);
         vga_put(3, screen_row, ' ', gutter_attr);
-        /* Draw line content */
+        
+        /* Document mode: parse and render with formatting */
         const char *line = ed_buf[buf_line];
         int len = (int)strlen(line);
-        int i;
         int content_cols = SCREEN_COLS - LINE_NUM_WIDTH;
-        for (i = 0; i < content_cols && i < len; i++)
-            vga_put(LINE_NUM_WIDTH + i, screen_row, line[i], attr);
-        for (; i < content_cols; i++)
-            vga_put(LINE_NUM_WIDTH + i, screen_row, ' ', attr);
+        int screen_col = 0;   /* screen position */
+        int src_pos = 0;      /* source position */
+        
+        /* Check for centering (^ at start) */
+        int center = 0;
+        int text_len = 0;
+        if (ed_doc_mode && len > 0 && line[0] == '^') {
+            center = 1;
+            src_pos = 1;
+            /* Calculate visible text length (excluding format markers) */
+            int in_bold = 0, in_italic = 0, in_strike = 0, in_color = 0;
+            for (int p = 1; p < len; p++) {
+                if (line[p] == '*' && p+1 < len && line[p+1] == '*') { in_bold = !in_bold; p++; continue; }
+                if (line[p] == '*' && (p == 0 || line[p-1] != '*')) { in_italic = !in_italic; continue; }
+                if (line[p] == '~' && p+1 < len && line[p+1] == '~') { in_strike = !in_strike; p++; continue; }
+                if (line[p] == '{') {
+                    int end = p + 1;
+                    while (end < len && line[end] != '}') end++;
+                    if (end < len) { p = end; continue; }
+                }
+                text_len++;
+            }
+            int padding = (content_cols - text_len) / 2;
+            if (padding < 0) padding = 0;
+            for (int p = 0; p < padding && screen_col < content_cols; p++) {
+                vga_put(LINE_NUM_WIDTH + screen_col, screen_row, ' ', base_attr);
+                screen_col++;
+            }
+        }
+        
+        /* Render the line with formatting */
+        uint8_t cur_attr = base_attr;
+        uint8_t fg = (base_attr & 0x0F);
+        uint8_t bg = (base_attr >> 4) & 0x07;
+        int is_bold = 0, is_italic = 0, is_strike = 0;
+        
+        while (src_pos < len && screen_col < content_cols) {
+            char c = line[src_pos];
+            
+            if (ed_doc_mode) {
+                /* Bold: **text** */
+                if (c == '*' && src_pos+1 < len && line[src_pos+1] == '*') {
+                    is_bold = !is_bold;
+                    src_pos += 2;
+                    continue;
+                }
+                
+                /* Italic: *text* (single asterisk, not double) */
+                if (c == '*' && (src_pos == 0 || line[src_pos-1] != '*') &&
+                    (src_pos+1 >= len || line[src_pos+1] != '*')) {
+                    is_italic = !is_italic;
+                    src_pos++;
+                    continue;
+                }
+                
+                /* Strikethrough: ~~text~~ */
+                if (c == '~' && src_pos+1 < len && line[src_pos+1] == '~') {
+                    is_strike = !is_strike;
+                    src_pos += 2;
+                    continue;
+                }
+                
+                /* Color: {colorname}text{/} */
+                if (c == '{') {
+                    int end = src_pos + 1;
+                    while (end < len && line[end] != '}') end++;
+                    if (end < len) {
+                        if (line[src_pos+1] == '/') {
+                            /* Reset color */
+                            fg = (base_attr & 0x0F);
+                        } else {
+                            /* Parse color name */
+                            fg = parse_color_name(&line[src_pos+1]);
+                        }
+                        src_pos = end + 1;
+                        continue;
+                    }
+                }
+            }
+            
+            /* Compute final attribute */
+            cur_attr = (bg << 4) | fg;
+            if (is_bold) cur_attr |= 0x08;       /* High intensity */
+            if (is_italic) cur_attr = (bg << 4) | COL_LCYAN;  /* Cyan for italic */
+            if (is_strike) cur_attr = (bg << 4) | COL_DARKGREY;  /* Dim for strike */
+            if (buf_line == ed_cr) cur_attr = (cur_attr & 0x0F) | 0x10;  /* Keep cursor line bg */
+            
+            vga_put(LINE_NUM_WIDTH + screen_col, screen_row, c, cur_attr);
+            screen_col++;
+            src_pos++;
+        }
+        
+        /* Fill rest with spaces */
+        for (; screen_col < content_cols; screen_col++)
+            vga_put(LINE_NUM_WIDTH + screen_col, screen_row, ' ', base_attr);
     } else {
         vga_put(0, screen_row, ' ', ATTR_NORMAL);
         vga_put(1, screen_row, ' ', ATTR_NORMAL);
@@ -164,8 +291,11 @@ static void render_msg(void) {
     else if (ed_ide_mode)
         vga_str(0, MSG_ROW, "  ^S Save  ^B Build  ^R Run  ^Q Quit  | ToastScript IDE",
                 ATTR_HINT, SCREEN_COLS);
+    else if (ed_doc_mode)
+        vga_str(0, MSG_ROW, "  ^S Save  ^D Plain  ^Q Quit | **Bold** *Italic* ~~Strike~~ ^Center",
+                ATTR_HINT, SCREEN_COLS);
     else
-        vga_str(0, MSG_ROW, "  ^S Save   ^Q Quit   Arrows Navigate   Home/End   PgUp/PgDn",
+        vga_str(0, MSG_ROW, "  ^S Save   ^D Doc   ^Q Quit   Arrows Navigate   Home/End   PgUp/PgDn",
                 ATTR_HINT, SCREEN_COLS);
 }
 
@@ -329,6 +459,7 @@ static int ed_save(void) {
 void editor_init(void) {
     ed_active   = 0;
     ed_ide_mode = 0;
+    ed_doc_mode = 0;
     ed_run_req  = 0;
     ed_nlines   = 1;
     ed_cr = ed_cc = ed_scroll = 0;
@@ -344,6 +475,13 @@ int editor_is_active(void) {
 
 void editor_open_ide(const char *filename) {
     ed_ide_mode = 1;
+    ed_doc_mode = 0;
+    editor_open(filename);
+}
+
+void editor_open_doc(const char *filename) {
+    ed_doc_mode = 1;
+    ed_ide_mode = 0;
     editor_open(filename);
 }
 
@@ -401,7 +539,65 @@ void editor_handle_key(uint8_t scancode, char ascii,
                 return;
             }
             ed_ide_mode = 0;
+            ed_doc_mode = 0;
             goto do_quit;
+        }
+        /* ---- Document mode toggle ---- */
+        if (scancode == 0x20 && !ed_ide_mode) {    /* Ctrl+D */
+            ed_doc_mode = !ed_doc_mode;
+            if (ed_doc_mode)
+                set_msg("Document mode ON - rich text formatting active");
+            else
+                set_msg("Plain text mode - formatting markers shown as-is");
+            render_all();
+            return;
+        }
+        /* ---- Formatting shortcuts (Doc mode only) ---- */
+        if (ed_doc_mode) {
+            if (scancode == 0x02) {      /* Ctrl+1 — insert bold markers */
+                ed_insert_char('*'); ed_insert_char('*');
+                ed_insert_char('*'); ed_insert_char('*');
+                ed_cc -= 2;  /* cursor between markers */
+                ed_modified = 1;
+                render_all();
+                return;
+            }
+            if (scancode == 0x03) {      /* Ctrl+2 — insert italic markers */
+                ed_insert_char('*');
+                ed_insert_char('*');
+                ed_cc -= 1;  /* cursor between markers */
+                ed_modified = 1;
+                render_all();
+                return;
+            }
+            if (scancode == 0x04) {      /* Ctrl+3 — insert strikethrough markers */
+                ed_insert_char('~'); ed_insert_char('~');
+                ed_insert_char('~'); ed_insert_char('~');
+                ed_cc -= 2;  /* cursor between markers */
+                ed_modified = 1;
+                render_all();
+                return;
+            }
+            if (scancode == 0x05) {      /* Ctrl+4 — insert center marker at line start */
+                /* Move cursor to start and insert ^ */
+                int old_cc = ed_cc;
+                ed_cc = 0;
+                ed_insert_char('^');
+                ed_cc = old_cc + 1;
+                ed_modified = 1;
+                render_all();
+                return;
+            }
+            if (scancode == 0x06) {      /* Ctrl+5 — insert color markers */
+                const char* color = "{red}";
+                for (int i = 0; color[i]; i++) ed_insert_char(color[i]);
+                const char* endcolor = "{/}";
+                for (int i = 0; endcolor[i]; i++) ed_insert_char(endcolor[i]);
+                ed_cc -= 3;  /* cursor before {/} */
+                ed_modified = 1;
+                render_all();
+                return;
+            }
         }
         /* ---- IDE-only shortcuts ---- */
         if (ed_ide_mode) {
@@ -505,5 +701,7 @@ void editor_handle_key(uint8_t scancode, char ascii,
 do_quit:
     ed_active   = 0;
     ed_modified = 0;
+    ed_doc_mode = 0;
+    ed_ide_mode = 0;
     /* kio.c redraws the shell prompt after detecting editor exited */
 }

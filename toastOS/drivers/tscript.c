@@ -6,6 +6,7 @@
 #include "tscript.h"
 #include "kio.h"
 #include "toast_libc.h"
+#include "panic.h"
 
 /* ---- limits ---- */
 #define TS_MAX_VARS    16

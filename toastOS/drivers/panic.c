@@ -94,6 +94,7 @@ extern void isr19();
 
 extern void irq0_handler();
 extern void keyboard_handler();
+extern void syscall_isr();
 
 /* Registers structure passed from assembly */
 typedef struct {
@@ -204,6 +205,13 @@ void init_idt() {
 
     /* Set up keyboard interrupt (IRQ1 = INT 0x21) */
     set_idt_gate(0x21, (unsigned int)keyboard_handler);
+
+    /* INT 0x80 - Syscall interface (ring 3 callable) */
+    idt[0x80].base_low = ((unsigned int)syscall_isr) & 0xFFFF;
+    idt[0x80].base_high = (((unsigned int)syscall_isr) >> 16) & 0xFFFF;
+    idt[0x80].sel = 0x08;
+    idt[0x80].always0 = 0;
+    idt[0x80].flags = 0xEE;  /* Present, Ring 3 (DPL=3), Interrupt Gate */
 
     /* PIC Initialization */
     write_port(0x20, 0x11);  // ICW1: Initialize + ICW4 needed

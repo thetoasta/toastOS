@@ -99,4 +99,15 @@ int fat16_chdir(const char* path);
 const char* fat16_getcwd(void);
 uint16_t fat16_get_cwd_cluster(void);
 
+/* Directory enumeration for POSIX dirent */
+typedef struct {
+    char     name[13];   /* 8.3 name, null-terminated, lowercased */
+    uint8_t  is_dir;     /* 1 if directory, 0 if file */
+    uint32_t file_size;
+} fat16_enum_entry_t;
+
+/* Enumerate entries in a directory. Returns count of entries filled (up to max_entries).
+ * path can be "/" for root, or "subdir". Returns -1 on error. */
+int fat16_enumerate_dir(const char *path, fat16_enum_entry_t *out, int max_entries);
+
 #endif /* FAT16_H */

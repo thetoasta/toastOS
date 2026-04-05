@@ -221,3 +221,51 @@ int ata_erase_sectors(uint32_t start_lba, uint32_t count) {
     
     return 0;
 }
+
+/* Query disk model name, type and capacity via ATA IDENTIFY */
+int ata_get_disk_info(disk_info_t *info) {
+    /* Zero out the struct */
+    uint8_t *p = (uint8_t *)info;
+    for (int i = 0; i < (int)sizeof(disk_info_t); i++) p[i] = 0;
+
+    /* Select master drive */
+    outb(ATA_PRIMARY_DRIVE_HEAD, ATA_MASTER);
+    ata_delay();
+    outb(ATA_PRIMARY_SECCOUNT, 0);
+    outb(ATA_PRIMARY_LBA_LO, 0);
+    outb(ATA_PRIMARY_LBA_MID, 0);
+    outb(ATA_PRIMARY_LBA_HI, 0);
+    outb(ATA_PRIMARY_COMMAND, ATA_CMD_IDENTIFY);
+    ata_delay();
+
+    uint8_t status = inb(ATA_PRIMARY_STATUS);
+    if (status == 0) return -1;
+    if (ata_wait_bsy() < 0) return -1;
+    if (inb(ATA_PRIMARY_LBA_MID) != 0 || inb(ATA_PRIMARY_LBA_HI) != 0) return -1;
+    if (ata_wait_drq() < 0) return -1;
+
+    /* Read the 256-word IDENTIFY block */
+    uint16_t id[256];
+    for (int i = 0; i < 256; i++)
+        id[i] = inw(ATA_PRIMARY_DATA);
+
+    /* Words 27-46: model string (40 ASCII chars, byte-swapped per word) */
+    for (int i = 0; i < 20; i++) {
+        info->model[i * 2]     = (char)(id[27 + i] >> 8);
+        info->model[i * 2 + 1] = (char)(id[27 + i] & 0xFF);
+    }
+    info->model[40] = '\0';
+    /* Trim trailing spaces */
+    for (int i = 39; i >= 0 && info->model[i] == ' '; i--)
+        info->model[i] = '\0';
+
+    /* Disk type */
+    info->type[0] = 'A'; info->type[1] = 'T'; info->type[2] = 'A';
+    info->type[3] = '\0';
+
+    /* Words 60-61: total addressable LBA28 sectors */
+    info->total_sectors = (uint32_t)id[60] | ((uint32_t)id[61] << 16);
+    info->size_mb = info->total_sectors / 2048; /* sectors * 512 / 1048576 */
+
+    return 0;
+}

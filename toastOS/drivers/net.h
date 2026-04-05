@@ -9,16 +9,17 @@
  * Simple networking using the RTL8139 NIC (the default in QEMU).
  *
  * Supports:
- *   - ping <ip>        : send an ICMP echo request and wait for a reply
- *   - ret-contents <ip>: fetch the contents of a webpage (HTTP GET on port 80)
- *   - localip           : show the IP address assigned to toastOS
+ *   - ping <ip|host>        : send an ICMP echo request and wait for a reply
+ *   - ret-contents <ip|host>: fetch the contents of a webpage (HTTP GET on port 80)
+ *   - localip               : show the IP address assigned to toastOS
  *
  * How it works (in plain english):
  *   1. We talk to the RTL8139 chip through I/O ports (like ata.c does for disks).
- *   2. We give ourselves a static IP address (10.0.2.15 — QEMU's default).
- *   3. For "ping" we build a tiny ICMP packet, send it, and listen for a reply.
- *   4. For "ret-contents" we open a TCP-like connection on port 80 and read back.
- *   5. For "localip" we just print the IP we configured.
+ *   2. We give ourselves a static IP address (10.0.2.15 - QEMU's default).
+ *   3. For hostnames we resolve via DNS (QEMU's DNS at 10.0.2.3).
+ *   4. For "ping" we build a tiny ICMP packet, send it, and listen for a reply.
+ *   5. For "ret-contents" we open a UDP connection on port 80 and read back.
+ *   6. For "localip" we just print the IP we configured.
  */
 
 /* ===== RTL8139 PCI / I/O constants ===== */
@@ -71,6 +72,13 @@
 #define ARP_REQUEST        1
 #define ARP_REPLY          2
 
+/* TCP flag bits */
+#define TCP_FIN  0x01
+#define TCP_SYN  0x02
+#define TCP_RST  0x04
+#define TCP_PSH  0x08
+#define TCP_ACK  0x10
+
 /* ===== Packet structures (packed so the compiler doesn't add padding) ===== */
 
 typedef struct __attribute__((packed)) {
@@ -112,21 +120,49 @@ typedef struct __attribute__((packed)) {
     uint32_t target_ip;
 } arp_header_t;
 
+typedef struct __attribute__((packed)) {
+    uint16_t src_port;
+    uint16_t dst_port;
+    uint32_t seq_num;
+    uint32_t ack_num;
+    uint8_t  data_off;   /* upper 4 bits = header length in 32-bit words */
+    uint8_t  flags;
+    uint16_t window;
+    uint16_t checksum;
+    uint16_t urgent;
+} tcp_header_t;
+
 /* ===== Public API ===== */
 
 /* Initialise the RTL8139 NIC.  Returns 0 on success, -1 if not found. */
 int  net_init(void);
 
-/* Send an ICMP ping to the given IP string (e.g. "10.0.2.2").
+/* Send an ICMP ping to the given IP or hostname (e.g. "10.0.2.2" or "google.com").
  * Prints round-trip result to screen.  Returns 0 on reply, -1 on timeout. */
-int  net_ping(const char *ip_str);
+int  net_ping(const char *host_str);
 
-/* Fetch the body of an HTTP page from ip_str on port 80 and print it.
+/* Fetch the body of an HTTP page from ip/host on port 80 and print it.
  * path is the URL path, e.g. "/" or "/index.html".
  * Returns 0 on success, -1 on failure. */
-int  net_http_get(const char *ip_str, const char *path);
+int  net_http_get(const char *host_str, const char *path);
+
+/* Simple terminal web browser.  Fetches a URL over HTTP, strips HTML tags,
+ * decodes common entities, and renders readable text with basic formatting.
+ * url can be "http://host/path", "host/path", or just "host".
+ * Returns 0 on success, -1 on failure. */
+int  net_browse(const char *url);
 
 /* Print the local IP address to screen. */
 void net_print_local_ip(void);
+
+/* Network information returned by net_get_info() */
+typedef struct {
+    char     connection_type[16]; /* "Ethernet" or "None" */
+    char     nic_name[32];       /* e.g. "RTL8139" */
+    int      link_up;            /* 1 = up, 0 = down/not found */
+} net_info_t;
+
+/* Query NIC status.  Always succeeds (fills defaults if NIC absent). */
+void net_get_info(net_info_t *info);
 
 #endif /* NET_H */

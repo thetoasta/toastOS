@@ -9,6 +9,7 @@
 
 void mmu_init(void);
 void *kmalloc(uint32_t size);
+void *kmalloc_aligned(uint32_t size, uint32_t alignment);
 void kfree(void *ptr);
 void *krealloc(void *ptr, uint32_t new_size);
 

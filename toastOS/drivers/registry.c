@@ -147,7 +147,7 @@ void reg_list_prefix(const char* prefix) {
 
 /* Persist registry to FAT16 file (root) */
 int reg_save(void) {
-    char buf[REG_MAX_KEYS * (REG_KEY_LEN + REG_VALUE_LEN + 4)];
+    static char buf[REG_MAX_KEYS * (REG_KEY_LEN + REG_VALUE_LEN + 4)];
     int pos = 0;
 
     registry_saving = 1;
@@ -193,7 +193,7 @@ int reg_save(void) {
 
 /* Load registry from disk file */
 int reg_load(void) {
-    char buf[REG_MAX_KEYS * (REG_KEY_LEN + REG_VALUE_LEN + 4)];
+    static char buf[REG_MAX_KEYS * (REG_KEY_LEN + REG_VALUE_LEN + 4)];
     if (!fat16_file_exists(REG_PERSIST_FILENAME)) return -1;
     int r = fat16_read_file(REG_PERSIST_FILENAME, buf, sizeof(buf));
     if (r < 0) return -1;
