@@ -40,7 +40,7 @@ freetype/src/sfnt/sfnt.c	1770327978
 freetype/src/smooth/smooth.c	1770327978
 freetype/src/truetype/truetype.c	1770327978
 others/kernel.asm	1775405578
-others/kernel.c	1775877209
+others/kernel.c	1775877733
 others/setjmp.asm	1774703552
 services/gui.c	1775323438
 services/settings.c	1775323334
