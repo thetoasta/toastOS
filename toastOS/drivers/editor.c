@@ -24,6 +24,7 @@
 #include "kio.h"
 #include "toast_libc.h"
 #include "tscript.h"
+#include "toastcc.h"
 
 /* ------------------------------------------------------------------ */
 /* VGA helpers (direct hardware access — fixed at 0xb8000)             */
@@ -614,7 +615,17 @@ void editor_handle_key(uint8_t scancode, char ascii,
                 vbuf[vpos] = '\0';
                 char errmsg[81];
                 errmsg[0] = '\0';
-                if (tscript_validate(vbuf, errmsg, sizeof(errmsg)) == 0) {
+                /* Detect .c file and use toastCC validator */
+                int fnl = (int)strlen(ed_filename);
+                int is_c = (fnl >= 2 &&
+                            ed_filename[fnl-2] == '.' &&
+                            (ed_filename[fnl-1] == 'C' || ed_filename[fnl-1] == 'c'));
+                int ok;
+                if (is_c)
+                    ok = (tcc_validate(vbuf, errmsg, sizeof(errmsg)) == 0);
+                else
+                    ok = (tscript_validate(vbuf, errmsg, sizeof(errmsg)) == 0);
+                if (ok) {
                     set_msg("Build OK!");
                 } else {
                     /* Prefix with "Build Error: " */
