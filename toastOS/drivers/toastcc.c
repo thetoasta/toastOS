@@ -1780,7 +1780,6 @@ void tcc_run_file(const char *filename) {
 
 int tcc_validate(const char *source, char *errmsg, int maxlen) {
     /* Validation: preprocess, tokenize, and try to parse */
-    static char pp_buf[TCC_PP_MAX];
     num_tokens = 0;
     pos = 0;
     num_vars = 0;
@@ -1793,7 +1792,7 @@ int tcc_validate(const char *source, char *errmsg, int maxlen) {
     alloc_bytes_used = 0;
 
     /* Preprocess #include directives */
-    const char *pp_src = tcc_preprocess(source, pp_buf, TCC_PP_MAX);
+    const char *pp_src = tcc_preprocess(source);
 
     int n = tokenize(pp_src);
     if (n < 0) {
@@ -1826,7 +1825,7 @@ int tcc_validate(const char *source, char *errmsg, int maxlen) {
     /* Check that main exists */
     int found_main = 0;
     for (int i = 0; i < num_funcs; i++) {
-        if (strcmp(functions[i].name, "main") == 0) {
+        if (strcmp(funcs[i].name, "main") == 0) {
             found_main = 1;
             break;
         }
