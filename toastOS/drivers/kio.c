@@ -764,6 +764,37 @@ void keyboard_handler_main(void) {
                     kprint("Cancelled.");
                 }
             }
+            else if (strcmp(input_buffer, "lock") == 0) {
+                 const char* password = reg_get("TOASTOS/SECURITY/PASSWORD");
+    if (password) {
+        bool active = true;
+        int tries = 0;
+        while (active) {
+            clear_screen();
+            kprint("password, set, please enter it to continue.");
+            kprint_newline();
+            kprint("enter password to sign into ");
+            const char* name = reg_get("TOASTOS/KERNEL/NAME");
+            if (name) {
+                kprint(name);
+            } else {
+                kprint("toastOS");
+            }
+            kprint(" > ");
+            char* input = rec_input();
+            if (check_password(input)) {
+                active = false;
+            } else {
+                tries++;
+                if (tries >= 3) {
+                    kprint("sorry, too many attempts. you must reboot manually.");
+                    __asm__ volatile ("cli; hlt");
+                }
+                kprint("that's incorrect. try again.");
+            }
+        }
+    }
+            }
             else if (strcmp(input_buffer, "whoami") == 0) {
                 const char* uname = reg_get("TOASTOS/KERNEL/NAME");
                 kprint(uname ? uname : "(not set - run 'toastsetup reset' to configure)");

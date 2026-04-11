@@ -130,7 +130,7 @@ void kmain(unsigned long magic, unsigned long addr)
         int tries = 0;
         while (active) {
             clear_screen();
-            kprint("password, set, please enter it to continue.");
+            kprint("password set. please enter it to continue.");
             kprint_newline();
             kprint("enter password to sign into ");
             const char* name = reg_get("TOASTOS/KERNEL/NAME");
