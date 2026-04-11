@@ -759,7 +759,7 @@ void keyboard_handler_main(void) {
                 if (strcmp(opt, "y") == 0) {
                     reg_set("TOASTOS/KERNEL/SETUPSTATUS", "0");
                     reg_save();
-                    kprint("Setup reset.");
+                    kprint("setup reset! if you already completed setup, you'll have to delete the name reg key.");
                 } else {
                     kprint("Cancelled.");
                 }
@@ -1026,10 +1026,6 @@ void keyboard_handler_main(void) {
                 }
             }
             else if (strncmp(input_buffer, "setpword ", 9) == 0) {
-                if (reg_get("TOASTOS/SECURITY/PASSWORD") != NULL) {
-                    kprint("Password already set. This command can only be used once.");
-                    return;
-                }
                 char* password = input_buffer + 9;
                 set_password(password);
                 kprint("password set");

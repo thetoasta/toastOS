@@ -85,13 +85,14 @@ void kmain(unsigned long magic, unsigned long addr)
     }
 
     if (recovery_triggered == 1) {
+        while (1) {
             kprint("something has gone wrong. you've entered recovery. check your regsystem and such.");
             kprint_newline();
             fat16_init();
             registry_init();
             kprint("init recov enviro!");
             kprint_newline();
-            kprint("options: 'regreset', 'diskreset', 'regvaloverwrite' ALL OPTIONS DONT HAVE UNDO FEATURES !");
+            kprint("options: 'regreset', 'diskreset', 'regvaloverwrite', 'rbt' ALL OPTIONS DONT HAVE UNDO FEATURES !");
             kprint_newline();
             kprint("> ");
             const char* action = rec_input();
@@ -100,11 +101,30 @@ void kmain(unsigned long magic, unsigned long addr)
             } else if (strcmp(action, "diskreset") == 0 ) {
                 fat16_format();
             } else if (strcmp(action, "regvaloverwrite") == 0) {
-                kprint("too lazy to add sry");
-            }
-        clear_screen();
-        kprint("done.");
-        __asm__ volatile ("cli; hlt");
+    kprint("key to overwrite: ");
+    char* temp_key = rec_input();
+    char* key = strdup(temp_key); // Copy the first input so it doesn't get overwritten
+
+    kprint("new value: ");
+    char* temp_value = rec_input();
+    char* value = strdup(temp_value); // Copy this too just to be safe
+
+    reg_set(key, value);
+    reg_save();
+    
+    kprint("done! ");
+    kprint(key);
+    kprint(" = ");
+    kprint(value);
+    kprint_newline();
+    
+    // If reg_set doesn't keep these pointers forever, 
+    // remember to kfree(key) and kfree(value) later!
+} else if (strcmp(action, "rbt") == 0) {
+                kprint("rebooting...");
+                reboot();
+            } 
+        }
     }
 
 	// shell is dependent on idt. idt is not really dependent on shell. some things like auto clear the screen wont do but it mostly works.
@@ -123,6 +143,22 @@ void kmain(unsigned long magic, unsigned long addr)
     exec_init();
 
     editor_init();
+
+
+    const char* xlx_flag = reg_get("TOASTOS/KERNEL/NAME");
+    const char* flag = reg_get("TOASTOS/KERNEL/SETUPSTATUS");
+    if (strcmp(xlx_flag, "") && strcmp(flag, "1") == 0) {
+        clear_screen();
+        kprint("setup exited prematurely or something went wrong.");
+        kprint_newline();
+        kprint("auto resetting the key to not cause issues.");
+        kprint_newline();
+        reg_set("TOASTOS/KERNEL/SETUPSTATUS", "0");
+        reg_save();
+        kprint("hit enter to reset setup... ");
+        rec_input();
+        reboot();
+    }
 
     const char* password = reg_get("TOASTOS/SECURITY/PASSWORD");
     if (password) {
@@ -154,9 +190,6 @@ void kmain(unsigned long magic, unsigned long addr)
         }
     }
 
-    const char* xlx_flag = reg_get("TOASTOS/KERNEL/NAME");
-
-    const char* flag = reg_get("TOASTOS/KERNEL/SETUPSTATUS");
     if (flag == 0 || strcmp(flag, "0") == 0) {
         if (xlx_flag) {
             clear_screen();
