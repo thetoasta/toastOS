@@ -1779,7 +1779,8 @@ void tcc_run_file(const char *filename) {
 }
 
 int tcc_validate(const char *source, char *errmsg, int maxlen) {
-    /* Quick validation: tokenize and look for main() */
+    /* Validation: preprocess, tokenize, and try to parse */
+    static char pp_buf[TCC_PP_MAX];
     num_tokens = 0;
     pos = 0;
     num_vars = 0;
@@ -1791,7 +1792,10 @@ int tcc_validate(const char *source, char *errmsg, int maxlen) {
     instruction_count = 0;
     alloc_bytes_used = 0;
 
-    int n = tokenize(source);
+    /* Preprocess #include directives */
+    const char *pp_src = tcc_preprocess(source, pp_buf, TCC_PP_MAX);
+
+    int n = tokenize(pp_src);
     if (n < 0) {
         strncpy(errmsg, "tokenize failed", maxlen - 1);
         errmsg[maxlen - 1] = '\0';
@@ -1799,10 +1803,30 @@ int tcc_validate(const char *source, char *errmsg, int maxlen) {
     }
     num_tokens = n;
 
-    /* Look for main identifier */
+    if (num_tokens == 0) {
+        strncpy(errmsg, "no code to validate", maxlen - 1);
+        errmsg[maxlen - 1] = '\0';
+        return -1;
+    }
+
+    /* Try to parse — this will catch syntax errors */
+    pos = 0;
+    int save_had_error = had_error;
+    had_error = 0;
+
+    parse_program();
+
+    if (had_error) {
+        strncpy(errmsg, "syntax error detected", maxlen - 1);
+        errmsg[maxlen - 1] = '\0';
+        had_error = save_had_error;
+        return -1;
+    }
+
+    /* Check that main exists */
     int found_main = 0;
-    for (int i = 0; i < num_tokens; i++) {
-        if (tokens[i].type == TOK_IDENT && strcmp(tokens[i].str_val, "main") == 0) {
+    for (int i = 0; i < num_funcs; i++) {
+        if (strcmp(functions[i].name, "main") == 0) {
             found_main = 1;
             break;
         }
@@ -1814,5 +1838,6 @@ int tcc_validate(const char *source, char *errmsg, int maxlen) {
     }
 
     errmsg[0] = '\0';
+    had_error = save_had_error;
     return 0;
 }
