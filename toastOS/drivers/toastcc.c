@@ -1,6 +1,7 @@
 /* toastCC - c interpreter for toastOS
  * supports a useful subset of C: variables, functions, arrays,
  * if/else, while, for, break, continue, return, printf, etc.
+ * Includes a sandbox layer with instruction limits for safe in-OS coding.
  */
 
 #include "toastcc.h"
@@ -9,6 +10,7 @@
 #include "mmu.h"
 #include "toast_libc.h"
 #include "stdio.h"
+#include "time.h"
 
 /* ===== limits ===== */
 #define TCC_MAX_TOKENS   4096
@@ -95,6 +97,12 @@ static value_t return_val;
 static int had_error;
 static int call_depth;
 
+/* ===== sandbox limits ===== */
+#define TCC_MAX_INSTRUCTIONS  500000   /* max ops before forced halt */
+#define TCC_MAX_ALLOC_BYTES   (64*1024) /* 64 KB heap cap per program */
+static int instruction_count;
+static int alloc_bytes_used;
+
 /* ===== helpers ===== */
 static void tcc_print(const char *s) { kprint(s); }
 static void tcc_newline(void) { kprint_newline(); }
@@ -117,6 +125,26 @@ static void tcc_error(const char *msg) {
     kprint(": ");
     kprint(msg);
     kprint_newline();
+}
+
+/* Sandbox: call this at every statement/loop iteration */
+static void sandbox_tick(void) {
+    if (had_error) return;
+    instruction_count++;
+    if (instruction_count > TCC_MAX_INSTRUCTIONS) {
+        tcc_error("sandbox: program exceeded instruction limit (infinite loop?)");
+    }
+}
+
+/* Sandbox: tracked allocation */
+static void *tcc_alloc(int size) {
+    if (alloc_bytes_used + size > TCC_MAX_ALLOC_BYTES) {
+        tcc_error("sandbox: memory allocation limit exceeded");
+        return 0;
+    }
+    void *p = kmalloc(size);
+    if (p) alloc_bytes_used += size;
+    return p;
 }
 
 static int peek(void) { return tokens[pos].type; }
@@ -599,13 +627,112 @@ static value_t builtin_sizeof_func(value_t *args, int argc) {
     return r;
 }
 
+/* ===== sandbox builtins ===== */
+
+static value_t builtin_clear(value_t *args, int argc) {
+    (void)args; (void)argc;
+    clear_screen();
+    value_t r = {0};
+    return r;
+}
+
+static value_t builtin_sleep(value_t *args, int argc) {
+    (void)argc;
+    value_t r = {0};
+    if (argc >= 1) {
+        /* Busy-wait using uptime counter (argument in seconds) */
+        uint32_t start = get_uptime_seconds();
+        uint32_t wait = (uint32_t)args[0].int_val;
+        if (wait > 30) wait = 30; /* cap at 30s to prevent lockup */
+        while (get_uptime_seconds() - start < wait)
+            __asm__ volatile("hlt");
+    }
+    return r;
+}
+
+static value_t builtin_get_key(value_t *args, int argc) {
+    (void)args; (void)argc;
+    value_t r = {0};
+    r.type = VAL_INT;
+    /* Wait for a keypress and return the ASCII value */
+    char *line = rec_input();
+    if (line && line[0])
+        r.int_val = (int)(unsigned char)line[0];
+    return r;
+}
+
+static value_t builtin_read_file(value_t *args, int argc) {
+    value_t r = {0};
+    r.type = VAL_STR;
+    r.str_val[0] = '\0';
+    if (argc >= 1 && args[0].type == VAL_STR) {
+        static char tcc_fbuf[4096];
+        int bytes = fat16_read_file(args[0].str_val, tcc_fbuf, 4095);
+        if (bytes > 0) {
+            tcc_fbuf[bytes] = '\0';
+            strncpy(r.str_val, tcc_fbuf, TCC_MAX_STR - 1);
+            r.str_val[TCC_MAX_STR - 1] = '\0';
+        }
+    }
+    return r;
+}
+
+static value_t builtin_write_file(value_t *args, int argc) {
+    value_t r = {0};
+    r.type = VAL_INT;
+    r.int_val = -1;
+    if (argc >= 2 && args[0].type == VAL_STR && args[1].type == VAL_STR) {
+        fat16_delete_file(args[0].str_val);
+        r.int_val = fat16_create_file(args[0].str_val, args[1].str_val);
+    }
+    return r;
+}
+
+static uint32_t tcc_rand_seed = 12345;
+static value_t builtin_rand(value_t *args, int argc) {
+    (void)args; (void)argc;
+    value_t r = {0};
+    r.type = VAL_INT;
+    /* Simple LCG PRNG */
+    tcc_rand_seed = tcc_rand_seed * 1103515245 + 12345;
+    r.int_val = (int)((tcc_rand_seed >> 16) & 0x7FFF);
+    return r;
+}
+
+static value_t builtin_srand(value_t *args, int argc) {
+    value_t r = {0};
+    if (argc >= 1) tcc_rand_seed = (uint32_t)args[0].int_val;
+    return r;
+}
+
+static value_t builtin_exit_func(value_t *args, int argc) {
+    (void)args; (void)argc;
+    value_t r = {0};
+    /* Force interpreter to stop */
+    had_error = 1;
+    return r;
+}
+
+static value_t builtin_uptime(value_t *args, int argc) {
+    (void)args; (void)argc;
+    value_t r = {0};
+    r.type = VAL_INT;
+    r.int_val = (int)get_uptime_seconds();
+    return r;
+}
+
 static int is_builtin(const char *name) {
     return strcmp(name, "printf") == 0 || strcmp(name, "puts") == 0 ||
            strcmp(name, "putchar") == 0 || strcmp(name, "strlen") == 0 ||
            strcmp(name, "strcmp") == 0 || strcmp(name, "atoi") == 0 ||
            strcmp(name, "abs") == 0 || strcmp(name, "input") == 0 ||
            strcmp(name, "itoa") == 0 || strcmp(name, "print") == 0 ||
-           strcmp(name, "println") == 0 || strcmp(name, "sizeof") == 0;
+           strcmp(name, "println") == 0 || strcmp(name, "sizeof") == 0 ||
+           strcmp(name, "clear") == 0 || strcmp(name, "sleep") == 0 ||
+           strcmp(name, "get_key") == 0 || strcmp(name, "read_file") == 0 ||
+           strcmp(name, "write_file") == 0 || strcmp(name, "rand") == 0 ||
+           strcmp(name, "srand") == 0 || strcmp(name, "exit") == 0 ||
+           strcmp(name, "uptime") == 0;
 }
 
 static value_t call_builtin(const char *name, value_t *args, int argc) {
@@ -621,6 +748,15 @@ static value_t call_builtin(const char *name, value_t *args, int argc) {
     if (strcmp(name, "print") == 0) return builtin_print(args, argc);
     if (strcmp(name, "println") == 0) return builtin_println(args, argc);
     if (strcmp(name, "sizeof") == 0) return builtin_sizeof_func(args, argc);
+    if (strcmp(name, "clear") == 0) return builtin_clear(args, argc);
+    if (strcmp(name, "sleep") == 0) return builtin_sleep(args, argc);
+    if (strcmp(name, "get_key") == 0) return builtin_get_key(args, argc);
+    if (strcmp(name, "read_file") == 0) return builtin_read_file(args, argc);
+    if (strcmp(name, "write_file") == 0) return builtin_write_file(args, argc);
+    if (strcmp(name, "rand") == 0) return builtin_rand(args, argc);
+    if (strcmp(name, "srand") == 0) return builtin_srand(args, argc);
+    if (strcmp(name, "exit") == 0) return builtin_exit_func(args, argc);
+    if (strcmp(name, "uptime") == 0) return builtin_uptime(args, argc);
     value_t r = {0};
     return r;
 }
@@ -1050,7 +1186,7 @@ static void parse_var_decl(void) {
                 expect(TOK_RBRACE);
                 if (arr_size == 0) arr_size = count;
                 v->array_size = arr_size;
-                v->arr_data = (int *)kmalloc(arr_size * sizeof(int));
+                v->arr_data = (int *)tcc_alloc(arr_size * sizeof(int));
                 if (v->arr_data) {
                     memset(v->arr_data, 0, arr_size * sizeof(int));
                     for (int i = 0; i < count && i < arr_size; i++)
@@ -1062,7 +1198,7 @@ static void parse_var_decl(void) {
                 int slen = strlen(s);
                 if (arr_size == 0) arr_size = slen + 1;
                 v->array_size = arr_size;
-                v->arr_data = (int *)kmalloc(arr_size * sizeof(int));
+                v->arr_data = (int *)tcc_alloc(arr_size * sizeof(int));
                 if (v->arr_data) {
                     for (int i = 0; i < slen && i < arr_size; i++)
                         v->arr_data[i] = (unsigned char)s[i];
@@ -1077,7 +1213,7 @@ static void parse_var_decl(void) {
         } else {
             if (arr_size == 0) arr_size = 16;
             v->array_size = arr_size;
-            v->arr_data = (int *)kmalloc(arr_size * sizeof(int));
+            v->arr_data = (int *)tcc_alloc(arr_size * sizeof(int));
             if (v->arr_data) memset(v->arr_data, 0, arr_size * sizeof(int));
         }
 
@@ -1094,7 +1230,7 @@ static void parse_var_decl(void) {
             if (v2) {
                 v2->is_array = 1;
                 v2->array_size = arr_size;
-                v2->arr_data = (int *)kmalloc(arr_size * sizeof(int));
+                v2->arr_data = (int *)tcc_alloc(arr_size * sizeof(int));
                 if (v2->arr_data) memset(v2->arr_data, 0, arr_size * sizeof(int));
             }
         }
@@ -1312,6 +1448,8 @@ static void parse_for(void) {
 
 static void parse_stmt(void) {
     if (had_error || exec_flag != EXEC_NORMAL) return;
+    sandbox_tick();
+    if (had_error) return;
 
     /* block */
     if (peek() == TOK_LBRACE) { parse_block(); return; }
@@ -1470,7 +1608,7 @@ static void parse_global_decl(void) {
         expect(TOK_RBRACKET);
         v->is_array = 1;
         v->array_size = sz;
-        v->arr_data = (int *)kmalloc(sz * sizeof(int));
+        v->arr_data = (int *)tcc_alloc(sz * sizeof(int));
         if (v->arr_data) memset(v->arr_data, 0, sz * sizeof(int));
     }
 
@@ -1518,6 +1656,62 @@ static void parse_program(void) {
     }
 }
 
+/* ===== simple #include preprocessor ===== */
+#define TCC_PP_MAX (TCC_SRC_MAX * 2)
+static char pp_buf[TCC_PP_MAX];
+
+/*
+ * Expand #include "filename" directives by inlining file contents.
+ * Only supports one level of includes (no recursive includes).
+ * Returns pointer to preprocessed source (static buffer).
+ */
+static const char *tcc_preprocess(const char *source) {
+    int out = 0;
+    int i = 0;
+    int src_len = strlen(source);
+
+    while (i < src_len && out < TCC_PP_MAX - 2) {
+        /* Check for #include at start of line */
+        if (source[i] == '#') {
+            /* Match #include "filename" */
+            if (strncmp(source + i, "#include", 8) == 0) {
+                int j = i + 8;
+                /* skip whitespace */
+                while (j < src_len && (source[j] == ' ' || source[j] == '\t')) j++;
+                if (j < src_len && source[j] == '"') {
+                    j++; /* skip opening quote */
+                    char inc_name[16];
+                    int ni = 0;
+                    while (j < src_len && source[j] != '"' && ni < 15) {
+                        inc_name[ni++] = source[j++];
+                    }
+                    inc_name[ni] = '\0';
+                    if (j < src_len && source[j] == '"') j++;
+                    /* skip to end of line */
+                    while (j < src_len && source[j] != '\n') j++;
+                    if (j < src_len) j++; /* skip newline */
+
+                    /* Read included file */
+                    static char inc_buf[4096];
+                    int bytes = fat16_read_file(inc_name, inc_buf, 4095);
+                    if (bytes > 0) {
+                        inc_buf[bytes] = '\0';
+                        /* Copy included content */
+                        for (int k = 0; k < bytes && out < TCC_PP_MAX - 2; k++)
+                            pp_buf[out++] = inc_buf[k];
+                        pp_buf[out++] = '\n';
+                    }
+                    i = j;
+                    continue;
+                }
+            }
+        }
+        pp_buf[out++] = source[i++];
+    }
+    pp_buf[out] = '\0';
+    return pp_buf;
+}
+
 /* ===== public entry points ===== */
 void tcc_run_source(const char *source) {
     /* reset state */
@@ -1531,9 +1725,14 @@ void tcc_run_source(const char *source) {
     return_val.int_val = 0;
     had_error = 0;
     call_depth = 0;
+    instruction_count = 0;
+    alloc_bytes_used = 0;
+
+    /* preprocess #include directives */
+    const char *pp_source = tcc_preprocess(source);
 
     /* tokenize */
-    int n = tokenize(source);
+    int n = tokenize(pp_source);
     if (n < 0) return;
     num_tokens = n;
 
@@ -1577,4 +1776,67 @@ void tcc_run_file(const char *filename) {
     kprint(filename);
     kprint_newline();
     tcc_run_source(src_buf);
+}
+
+int tcc_validate(const char *source, char *errmsg, int maxlen) {
+    /* Validation: preprocess, tokenize, and try to parse */
+    num_tokens = 0;
+    pos = 0;
+    num_vars = 0;
+    num_funcs = 0;
+    scope_depth = 0;
+    exec_flag = EXEC_NORMAL;
+    had_error = 0;
+    call_depth = 0;
+    instruction_count = 0;
+    alloc_bytes_used = 0;
+
+    /* Preprocess #include directives */
+    const char *pp_src = tcc_preprocess(source);
+
+    int n = tokenize(pp_src);
+    if (n < 0) {
+        strncpy(errmsg, "tokenize failed", maxlen - 1);
+        errmsg[maxlen - 1] = '\0';
+        return -1;
+    }
+    num_tokens = n;
+
+    if (num_tokens == 0) {
+        strncpy(errmsg, "no code to validate", maxlen - 1);
+        errmsg[maxlen - 1] = '\0';
+        return -1;
+    }
+
+    /* Try to parse — this will catch syntax errors */
+    pos = 0;
+    int save_had_error = had_error;
+    had_error = 0;
+
+    parse_program();
+
+    if (had_error) {
+        strncpy(errmsg, "syntax error detected", maxlen - 1);
+        errmsg[maxlen - 1] = '\0';
+        had_error = save_had_error;
+        return -1;
+    }
+
+    /* Check that main exists */
+    int found_main = 0;
+    for (int i = 0; i < num_funcs; i++) {
+        if (strcmp(funcs[i].name, "main") == 0) {
+            found_main = 1;
+            break;
+        }
+    }
+    if (!found_main) {
+        strncpy(errmsg, "no main() function found", maxlen - 1);
+        errmsg[maxlen - 1] = '\0';
+        return -1;
+    }
+
+    errmsg[0] = '\0';
+    had_error = save_had_error;
+    return 0;
 }

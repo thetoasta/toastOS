@@ -759,7 +759,7 @@ void keyboard_handler_main(void) {
                 if (strcmp(opt, "y") == 0) {
                     reg_set("TOASTOS/KERNEL/SETUPSTATUS", "0");
                     reg_save();
-                    kprint("Setup reset.");
+                    kprint("setup reset! if you already completed setup, you'll have to delete the name reg key.");
                 } else {
                     kprint("Cancelled.");
                 }
@@ -978,10 +978,20 @@ void keyboard_handler_main(void) {
             }
 
             /* ===== TOAST C COMPILER ===== */
+            else if (strncmp(input_buffer, "tcc ide ", 8) == 0) {
+                char* fname = input_buffer + 8;
+                if (fname[0] == '\0') {
+                    kprint("Usage: tcc ide <file.c>");
+                } else {
+                    editor_open_ide(fname);
+                    input_index = 0;
+                    return;
+                }
+            }
             else if (strncmp(input_buffer, "tcc ", 4) == 0) {
                 char* fname = input_buffer + 4;
                 if (fname[0] == '\0') {
-                    kprint("Usage: tcc <file.c>");
+                    kprint("Usage: tcc <file.c>  or  tcc ide <file.c>");
                 } else {
                     tcc_run_file(fname);
                 }
@@ -1016,10 +1026,6 @@ void keyboard_handler_main(void) {
                 }
             }
             else if (strncmp(input_buffer, "setpword ", 9) == 0) {
-                if (reg_get("TOASTOS/SECURITY/PASSWORD") != NULL) {
-                    kprint("Password already set. This command can only be used once.");
-                    return;
-                }
                 char* password = input_buffer + 9;
                 set_password(password);
                 kprint("password set");
@@ -1230,10 +1236,26 @@ do_tscript_run: {
         if (r < 0) {
             clear_screen();
             kprint_newline();
-            kprint("[tscript] Could not read file.");
+            kprint("[run] Could not read file.");
         } else {
             ts_run_buf[r] = '\0';
-            tscript_run(ts_run_buf);
+            /* Detect file type by extension and route accordingly */
+            int fnlen = strlen(fn);
+            int is_c_file = (fnlen >= 2 &&
+                             fn[fnlen-2] == '.' &&
+                             (fn[fnlen-1] == 'C' || fn[fnlen-1] == 'c'));
+            if (is_c_file) {
+                /* .C file → run with toastCC interpreter */
+                clear_screen();
+                kprint_newline();
+                kprint("[toastCC] running ");
+                kprint(fn);
+                kprint_newline();
+                tcc_run_source(ts_run_buf);
+            } else {
+                /* default: ToastScript */
+                tscript_run(ts_run_buf);
+            }
         }
         kprint_newline();
         kprint("[press any key to return to editor]");

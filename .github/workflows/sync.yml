@@ -1,0 +1,19 @@
+name: Sync to GitLab
+
+on:
+  push:
+    branches:
+      - main  # Change this if your primary branch is named something else
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mirror to GitLab
+        run: |
+          git push --prune --force "https://thetoasta:${{ secrets.GITLAB_TOKEN }}@gitlab.com/thetoasta/toastos.git" +refs/heads/*:refs/heads/* +refs/tags/*:refs/tags/*
